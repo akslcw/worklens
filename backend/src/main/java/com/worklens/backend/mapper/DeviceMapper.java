@@ -1,0 +1,13 @@
+package com.worklens.backend.mapper;
+
+import com.worklens.backend.entity.Device;
+import org.apache.ibatis.annotations.Mapper;
+import java.util.List;
+
+@Mapper
+public interface DeviceMapper {
+    Device findByMacAddress(String macAddress);
+    Device findById(Long id);
+    int insert(Device device);
+    int updateLastOnline(Long id);
+}

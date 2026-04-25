@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.worklens.backend.mapper.AppRecordMapper">
+
+    <resultMap id="BaseResultMap" type="AppRecord">
+        <id column="id" property="id"/>
+        <result column="device_id" property="deviceId"/>
+        <result column="app_name" property="appName"/>
+        <result column="window_title" property="windowTitle"/>
+        <result column="duration_seconds" property="durationSeconds"/>
+        <result column="record_date" property="recordDate"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO app_records (device_id, app_name, window_title, duration_seconds, record_date)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.deviceId}, #{item.appName}, #{item.windowTitle}, #{item.durationSeconds}, #{item.recordDate})
+        </foreach>
+    </insert>
+
+    <select id="findByDeviceIdAndDate" resultMap="BaseResultMap">
+        SELECT * FROM app_records
+        WHERE device_id = #{deviceId} AND record_date = #{date}
+    </select>
+
+    <select id="findByEmployeeIdAndDate" resultMap="BaseResultMap">
+        SELECT ar.* FROM app_records ar
+                             JOIN devices d ON ar.device_id = d.id
+        WHERE d.employee_id = #{employeeId} AND ar.record_date = #{date}
+    </select>
+
+</mapper>

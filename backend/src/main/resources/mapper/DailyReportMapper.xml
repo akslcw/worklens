@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.worklens.backend.mapper.DailyReportMapper">
+
+    <resultMap id="BaseResultMap" type="DailyReport">
+        <id column="id" property="id"/>
+        <result column="employee_id" property="employeeId"/>
+        <result column="report_date" property="reportDate"/>
+        <result column="work_seconds" property="workSeconds"/>
+        <result column="idle_seconds" property="idleSeconds"/>
+        <result column="efficiency_score" property="efficiencyScore"/>
+        <result column="ai_comment" property="aiComment"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insertOrUpdate">
+        INSERT INTO daily_reports (employee_id, report_date, work_seconds, idle_seconds, efficiency_score, ai_comment)
+        VALUES (#{employeeId}, #{reportDate}, #{workSeconds}, #{idleSeconds}, #{efficiencyScore}, #{aiComment})
+        ON DUPLICATE KEY UPDATE
+                             work_seconds = #{workSeconds},
+                             idle_seconds = #{idleSeconds},
+                             efficiency_score = #{efficiencyScore},
+                             ai_comment = #{aiComment}
+    </insert>
+
+    <select id="findByEmployeeIdAndDate" resultMap="BaseResultMap">
+        SELECT * FROM daily_reports
+        WHERE employee_id = #{employeeId} AND report_date = #{date}
+    </select>
+
+    <select id="findByEmployeeId" resultMap="BaseResultMap">
+        SELECT * FROM daily_reports
+        WHERE employee_id = #{employeeId}
+        ORDER BY report_date DESC
+    </select>
+
+    <select id="findAll" resultMap="BaseResultMap">
+        SELECT * FROM daily_reports ORDER BY report_date DESC
+    </select>
+
+</mapper>

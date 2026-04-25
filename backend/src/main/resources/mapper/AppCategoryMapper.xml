@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.worklens.backend.mapper.AppCategoryMapper">
+
+    <resultMap id="BaseResultMap" type="AppCategory">
+        <id column="id" property="id"/>
+        <result column="app_name" property="appName"/>
+        <result column="category" property="category"/>
+        <result column="is_work" property="isWork"/>
+    </resultMap>
+
+    <select id="findByAppName" resultMap="BaseResultMap">
+        SELECT * FROM app_categories WHERE app_name = #{appName}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO app_categories (app_name, category, is_work)
+        VALUES (#{appName}, #{category}, #{isWork})
+    </insert>
+
+</mapper>
