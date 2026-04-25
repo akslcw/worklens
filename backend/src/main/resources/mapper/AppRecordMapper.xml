@@ -32,4 +32,12 @@
         WHERE d.employee_id = #{employeeId} AND ar.record_date = #{date}
     </select>
 
+    <select id="selectByUniqueKey" resultType="com.worklens.backend.entity.AppRecord">
+        SELECT * FROM app_records
+        WHERE device_id = #{deviceId}
+          AND app_name = #{appName}
+          AND record_date = #{recordDate}
+        LIMIT 1
+    </select>
+
 </mapper>

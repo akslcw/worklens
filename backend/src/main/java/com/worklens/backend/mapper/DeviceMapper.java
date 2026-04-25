@@ -10,4 +10,5 @@ public interface DeviceMapper {
     Device findById(Long id);
     int insert(Device device);
     int updateLastOnline(Long id);
+    Device selectByMac(String macAddress);
 }

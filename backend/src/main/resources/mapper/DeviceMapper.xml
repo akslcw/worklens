@@ -29,4 +29,8 @@
         UPDATE devices SET last_online = NOW() WHERE id = #{id}
     </update>
 
+    <select id="selectByMac" resultType="com.worklens.backend.entity.Device">
+        SELECT * FROM devices WHERE mac_address = #{macAddress}
+    </select>
+
 </mapper>
