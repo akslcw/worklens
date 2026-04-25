@@ -6,4 +6,5 @@ import java.util.List;
 public interface DailyReportService {
     DailyReport getByEmployeeAndDate(Long employeeId, String date);
     List<DailyReport> listByEmployee(Long employeeId);
+    List<DailyReport> listAll();
 }

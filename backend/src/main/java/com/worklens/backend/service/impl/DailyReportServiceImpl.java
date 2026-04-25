@@ -24,4 +24,9 @@ public class DailyReportServiceImpl implements DailyReportService {
     public List<DailyReport> listByEmployee(Long employeeId) {
         return dailyReportMapper.findByEmployeeId(employeeId);
     }
+
+    @Override
+    public List<DailyReport> listAll() {
+        return dailyReportMapper.findAll();
+    }
 }
