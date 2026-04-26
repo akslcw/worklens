@@ -1,6 +1,6 @@
 import axios from 'axios'
+import router from '../router'
 
-// 下划线转驼峰
 const toCamel = (str) => str.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
 
 const convertKeys = (obj) => {
@@ -18,6 +18,14 @@ const request = axios.create({
     timeout: 10000
 })
 
+request.interceptors.request.use(config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`
+    }
+    return config
+})
+
 request.interceptors.response.use(
     response => {
         const data = response.data
@@ -27,7 +35,10 @@ request.interceptors.response.use(
         return data
     },
     error => {
-        console.error('请求失败:', error)
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token')
+            router.push('/login')
+        }
         return Promise.reject(error)
     }
 )

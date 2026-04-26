@@ -4,6 +4,12 @@ const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
         {
+            path: '/login',
+            name: 'login',
+            component: () => import('../views/LoginView.vue'),
+            meta: { requiresAuth: false }
+        },
+        {
             path: '/',
             redirect: '/dashboard'
         },
@@ -18,14 +24,14 @@ const router = createRouter({
             component: () => import('../views/EmployeeView.vue')
         },
         {
-            path: '/reports',
-            name: 'reports',
-            component: () => import('../views/ReportView.vue')
-        },
-        {
             path: '/employees/:id',
             name: 'employeeDetail',
             component: () => import('../views/EmployeeDetailView.vue')
+        },
+        {
+            path: '/reports',
+            name: 'reports',
+            component: () => import('../views/ReportView.vue')
         },
         {
             path: '/categories',
@@ -33,6 +39,15 @@ const router = createRouter({
             component: () => import('../views/CategoryView.vue')
         }
     ]
+})
+
+router.beforeEach((to, from, next) => {
+    const token = localStorage.getItem('token')
+    if (to.name !== 'login' && !token) {
+        next({ name: 'login' })
+    } else {
+        next()
+    }
 })
 
 export default router

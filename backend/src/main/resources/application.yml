@@ -19,3 +19,7 @@ deepseek:
   api-key: ${DEEPSEEK_API_KEY:your-key-here}
   api-url: https://api.deepseek.com/v1/chat/completions
   model: deepseek-chat
+
+jwt:
+  secret: ${JWT_SECRET:worklens-secret-key-2026-must-be-long-enough}
+  expiration: 86400000
