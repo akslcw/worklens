@@ -1,13 +1,12 @@
 package com.worklens.backend.dto;
 
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Data
 public class UploadRecordDTO {
-    private String macAddress;
     private String appName;
     private String windowTitle;
-    private LocalDateTime startTime;
     private Integer durationSeconds;
+    private LocalDate recordDate;
 }

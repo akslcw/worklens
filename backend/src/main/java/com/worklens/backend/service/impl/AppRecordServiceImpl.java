@@ -1,5 +1,6 @@
 package com.worklens.backend.service.impl;
 
+import com.worklens.backend.dto.UploadBatchDTO;
 import com.worklens.backend.dto.UploadRecordDTO;
 import com.worklens.backend.entity.AppRecord;
 import com.worklens.backend.entity.Device;
@@ -11,9 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.ArrayList;
 
 @Slf4j
 @Service
@@ -24,31 +23,34 @@ public class AppRecordServiceImpl implements AppRecordService {
     private final DeviceMapper deviceMapper;
 
     @Override
-    public void upload(UploadRecordDTO dto) {
+    public void upload(UploadBatchDTO dto) {
         Device device = deviceMapper.selectByMac(dto.getMacAddress());
         if (device == null) {
             log.warn("未知设备上报数据, MAC: {}", dto.getMacAddress());
             return;
         }
 
-        AppRecord existing = appRecordMapper.selectByUniqueKey(
-                device.getId(), dto.getAppName(), dto.getStartTime().toLocalDate()
-        );
-        if (existing != null) {
-            log.info("重复上报，跳过: deviceId={}, app={}", device.getId(), dto.getAppName());
-            return;
+        for (UploadRecordDTO item : dto.getRecords()) {
+            AppRecord existing = appRecordMapper.selectByUniqueKey(
+                    device.getId(), item.getAppName(), item.getRecordDate()
+            );
+            if (existing != null) {
+                // 累加时长，不跳过
+                existing.setDurationSeconds(existing.getDurationSeconds() + item.getDurationSeconds());
+                appRecordMapper.updateDuration(existing.getId(), existing.getDurationSeconds());
+                log.info("累加时长: deviceId={}, app={}, +{}s",
+                        device.getId(), item.getAppName(), item.getDurationSeconds());
+            } else {
+                AppRecord record = new AppRecord();
+                record.setDeviceId(device.getId());
+                record.setAppName(item.getAppName());
+                record.setWindowTitle(item.getWindowTitle());
+                record.setDurationSeconds(item.getDurationSeconds());
+                record.setRecordDate(item.getRecordDate());
+                appRecordMapper.insertBatch(List.of(record));
+            }
         }
-
-        AppRecord record = new AppRecord();
-        record.setDeviceId(device.getId());
-        record.setAppName(dto.getAppName());
-        record.setWindowTitle(dto.getWindowTitle());
-        record.setDurationSeconds(dto.getDurationSeconds());
-        record.setRecordDate(dto.getStartTime().toLocalDate());
-
-        List<AppRecord> records = new ArrayList<>();
-        records.add(record);
-        appRecordMapper.insertBatch(records);}
+    }
 
     @Override
     public List<AppRecord> listByEmployeeAndDate(Long employeeId, String date) {

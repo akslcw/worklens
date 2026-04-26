@@ -40,4 +40,8 @@
         LIMIT 1
     </select>
 
+    <update id="updateDuration">
+        UPDATE app_records SET duration_seconds = #{durationSeconds} WHERE id = #{id}
+    </update>
+
 </mapper>
