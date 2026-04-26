@@ -15,6 +15,12 @@ public interface AppRecordMapper {
     List<AppRecord> findByEmployeeIdAndDate(@Param("employeeId") Long employeeId, @Param("date") LocalDate date);
     AppRecord selectByUniqueKey(@Param("deviceId") Long deviceId,
                                 @Param("appName") String appName,
-                                @Param("recordDate") LocalDate recordDate);
+                                @Param("recordDate") LocalDate recordDate
+    );
     void updateDuration(@Param("id") Long id, @Param("durationSeconds") Integer durationSeconds);
+    List<AppRecord> findByEmployeeIdAndDateRange(
+            @Param("employeeId") Long employeeId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 }

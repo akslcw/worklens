@@ -39,4 +39,11 @@
         SELECT * FROM daily_reports ORDER BY report_date DESC
     </select>
 
+    <select id="findAllWithEmployee" resultType="java.util.LinkedHashMap">
+        SELECT dr.*, e.name as employeeName, e.employee_no as employeeNo
+        FROM daily_reports dr
+                 JOIN employees e ON dr.employee_id = e.id
+        ORDER BY dr.report_date DESC
+    </select>
+
 </mapper>

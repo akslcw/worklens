@@ -56,4 +56,13 @@ public class AppRecordServiceImpl implements AppRecordService {
     public List<AppRecord> listByEmployeeAndDate(Long employeeId, String date) {
         return appRecordMapper.findByEmployeeIdAndDate(employeeId, LocalDate.parse(date));
     }
+
+    @Override
+    public List<AppRecord> listByEmployeeAndDateRange(Long employeeId, String startDate, String endDate) {
+        return appRecordMapper.findByEmployeeIdAndDateRange(
+                employeeId,
+                LocalDate.parse(startDate),
+                LocalDate.parse(endDate)
+        );
+    }
 }

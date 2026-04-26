@@ -26,4 +26,11 @@ public class AppRecordController {
             @RequestParam String date) {
         return Result.success(appRecordService.listByEmployeeAndDate(employeeId, date));
     }
+    @GetMapping("/{employeeId}/range")
+    public Result<?> listByDateRange(
+            @PathVariable Long employeeId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        return Result.success(appRecordService.listByEmployeeAndDateRange(employeeId, startDate, endDate));
+    }
 }

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -28,5 +29,10 @@ public class DailyReportServiceImpl implements DailyReportService {
     @Override
     public List<DailyReport> listAll() {
         return dailyReportMapper.findAll();
+    }
+
+    @Override
+    public List<Map<String, Object>> listAllWithEmployee() {
+        return dailyReportMapper.findAllWithEmployee();
     }
 }

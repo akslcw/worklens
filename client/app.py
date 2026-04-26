@@ -48,19 +48,19 @@ class WorkLensApp:
         card_frame.pack(fill=X)
 
         # 今日使用时长
-        total_card = ttk.LabelFrame(card_frame, text="今日总使用时长", padding=12, bootstyle="primary")
+        total_card = ttk.LabelFrame(card_frame, text="今日总使用时长")
         total_card.pack(side=LEFT, expand=True, fill=BOTH, padx=8)
         self.total_label = ttk.Label(total_card, text="0 小时 0 分钟", font=("微软雅黑", 18, "bold"), bootstyle="primary")
         self.total_label.pack()
 
         # 当前应用
-        current_card = ttk.LabelFrame(card_frame, text="当前使用应用", padding=12, bootstyle="info")
+        current_card = ttk.LabelFrame(card_frame, text="当前使用应用")
         current_card.pack(side=LEFT, expand=True, fill=BOTH, padx=8)
         self.current_label = ttk.Label(current_card, text="—", font=("微软雅黑", 14), bootstyle="info")
         self.current_label.pack()
 
         # 应用列表
-        list_frame = ttk.LabelFrame(self.root, text="应用使用明细", padding=12)
+        list_frame = ttk.LabelFrame(self.root, text="应用使用明细")
         list_frame.pack(fill=BOTH, expand=True, padx=16, pady=8)
 
         columns = ("app", "duration")
@@ -120,10 +120,39 @@ class WorkLensApp:
 
     def _manual_upload(self):
         def do_upload():
-            upload_data(self.records)
-            ttk.dialogs.Messagebox.show_info("同步成功", "数据已成功同步到服务器")
-        threading.Thread(target=do_upload, daemon=True).start()
+            import socket
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            items = [
+                {
+                    "appName": app,
+                    "windowTitle": title,
+                    "durationSeconds": duration,
+                    "recordDate": today
+                }
+                for (app, title), duration in self.records.items()
+                if duration >= 10
+            ]
+            payload = {
+                "macAddress": get_mac_address(),
+                "deviceName": socket.gethostname(),
+                "employeeId": EMPLOYEE_ID,
+                "records": items
+            }
+            try:
+                import requests
+                response = requests.post(
+                    f"{SERVER_URL}/api/records/upload",
+                    json=payload,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    ttk.dialogs.Messagebox.show_info("同步成功", "数据已成功同步到服务器")
+                else:
+                    ttk.dialogs.Messagebox.show_error("同步失败", f"状态码: {response.status_code}")
+            except Exception as e:
+                ttk.dialogs.Messagebox.show_error("同步失败", str(e))
 
+        threading.Thread(target=do_upload, daemon=True).start()
 
 if __name__ == "__main__":
     root = ttk.Window(themename="flatly")

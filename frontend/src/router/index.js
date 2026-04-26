@@ -21,6 +21,11 @@ const router = createRouter({
             path: '/reports',
             name: 'reports',
             component: () => import('../views/ReportView.vue')
+        },
+        {
+            path: '/employees/:id',
+            name: 'employeeDetail',
+            component: () => import('../views/EmployeeDetailView.vue')
         }
     ]
 })

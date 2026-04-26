@@ -8,4 +8,5 @@ import java.util.List;
 public interface AppRecordService {
     void upload(UploadBatchDTO dto);
     List<AppRecord> listByEmployeeAndDate(Long employeeId, String date);
+    List<AppRecord> listByEmployeeAndDateRange(Long employeeId, String startDate, String endDate);
 }

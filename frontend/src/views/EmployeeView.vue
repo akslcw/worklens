@@ -11,8 +11,9 @@
       <el-table-column prop="name" label="姓名" width="120"/>
       <el-table-column prop="employeeNo" label="工号" width="120"/>
       <el-table-column prop="createdAt" label="创建时间"/>
-      <el-table-column label="操作" width="100">
+      <el-table-column label="操作" width="160">
         <template #default="{ row }">
+          <el-button type="primary" size="small" @click="$router.push(`/employees/${row.id}`)">查看详情</el-button>
           <el-button type="danger" size="small" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>

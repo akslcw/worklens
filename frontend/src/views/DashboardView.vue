@@ -36,7 +36,16 @@
 
     <el-card header="效率报告明细">
       <el-table :data="reports" style="width:100%">
-        <el-table-column prop="employeeId" label="员工ID" width="100"/>
+        <el-table-column label="姓名" width="100">
+          <template #default="{ row }">
+            {{ row.employeeName }}
+          </template>
+        </el-table-column>
+        <el-table-column label="工号" width="120">
+          <template #default="{ row }">
+            {{ row.employeeNo }}
+          </template>
+        </el-table-column>
         <el-table-column prop="reportDate" label="日期" width="140"/>
         <el-table-column prop="efficiencyScore" label="效率评分" width="200">
           <template #default="{ row }">

@@ -44,4 +44,12 @@
         UPDATE app_records SET duration_seconds = #{durationSeconds} WHERE id = #{id}
     </update>
 
+    <select id="findByEmployeeIdAndDateRange" resultMap="BaseResultMap">
+        SELECT ar.* FROM app_records ar
+                             JOIN devices d ON ar.device_id = d.id
+        WHERE d.employee_id = #{employeeId}
+          AND ar.record_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY ar.record_date DESC, ar.duration_seconds DESC
+    </select>
+
 </mapper>

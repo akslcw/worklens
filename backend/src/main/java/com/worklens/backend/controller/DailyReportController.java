@@ -15,10 +15,9 @@ public class DailyReportController {
     private final DailyReportService dailyReportService;
 
     @GetMapping
-    public Result<List<DailyReport>> listAll() {
-        return Result.success(dailyReportService.listAll());
+    public Result<?> listAll() {
+        return Result.success(dailyReportService.listAllWithEmployee());
     }
-
     @GetMapping("/{employeeId}")
     public Result<List<DailyReport>> listByEmployee(@PathVariable Long employeeId) {
         return Result.success(dailyReportService.listByEmployee(employeeId));
