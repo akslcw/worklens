@@ -10,11 +10,13 @@
       <el-form inline>
         <el-form-item label="开始日期">
           <el-date-picker v-model="startDate" type="date"
-                          value-format="YYYY-MM-DD" style="width:160px;"/>
+                          value-format="YYYY-MM-DD" style="width:160px;"
+                          :disabled-date="(d) => d > new Date()"/>
         </el-form-item>
         <el-form-item label="结束日期">
           <el-date-picker v-model="endDate" type="date"
-                          value-format="YYYY-MM-DD" style="width:160px;"/>
+                          value-format="YYYY-MM-DD" style="width:160px;"
+                          :disabled-date="(d) => d > new Date()"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="load">查询</el-button>
