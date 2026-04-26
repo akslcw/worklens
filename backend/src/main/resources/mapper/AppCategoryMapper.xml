@@ -19,4 +19,18 @@
         VALUES (#{appName}, #{category}, #{isWork})
     </insert>
 
+    <select id="findAll" resultMap="BaseResultMap">
+        SELECT * FROM app_categories ORDER BY is_work DESC, app_name ASC
+    </select>
+
+    <update id="update">
+        UPDATE app_categories
+        SET app_name = #{appName}, category = #{category}, is_work = #{isWork}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM app_categories WHERE id = #{id}
+    </delete>
+
 </mapper>

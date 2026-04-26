@@ -14,6 +14,7 @@
         <el-menu-item index="/dashboard">数据总览</el-menu-item>
         <el-menu-item index="/employees">员工管理</el-menu-item>
         <el-menu-item index="/reports">效率报告</el-menu-item>
+        <el-menu-item index="/categories">应用分类管理</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
