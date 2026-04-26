@@ -20,7 +20,21 @@
         </el-card>
       </el-col>
     </el-row>
-    <el-card>
+
+    <el-row :gutter="16" style="margin-bottom:16px;">
+      <el-col :span="12">
+        <el-card header="效率评分趋势">
+          <div ref="lineChart" style="height:260px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card header="工作/摸鱼时长分布">
+          <div ref="pieChart" style="height:260px;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card header="效率报告明细">
       <el-table :data="reports" style="width:100%">
         <el-table-column prop="employeeId" label="员工ID" width="100"/>
         <el-table-column prop="reportDate" label="日期" width="140"/>
@@ -47,12 +61,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
+import * as echarts from 'echarts'
 import { getEmployees } from '../api/employee'
 import { getReports } from '../api/report'
 
 const employees = ref([])
 const reports = ref([])
+const lineChart = ref(null)
+const pieChart = ref(null)
 
 const employeeCount = computed(() => employees.value.length)
 const reportCount = computed(() => reports.value.length)
@@ -62,10 +79,50 @@ const avgScore = computed(() => {
   return Math.round(sum / reports.value.length)
 })
 
+const initCharts = () => {
+  // 折线图：效率评分趋势
+  const line = echarts.init(lineChart.value)
+  line.setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: reports.value.map(r => r.reportDate)
+    },
+    yAxis: { type: 'value', min: 0, max: 100 },
+    series: [{
+      name: '效率评分',
+      type: 'line',
+      smooth: true,
+      data: reports.value.map(r => r.efficiencyScore),
+      itemStyle: { color: '#409EFF' },
+      areaStyle: { color: 'rgba(64,158,255,0.1)' }
+    }]
+  })
+
+  // 饼图：工作/摸鱼时长
+  const totalWork = reports.value.reduce((acc, r) => acc + r.workSeconds, 0)
+  const totalIdle = reports.value.reduce((acc, r) => acc + r.idleSeconds, 0)
+  const pie = echarts.init(pieChart.value)
+  pie.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {d}%' },
+    legend: { bottom: 0 },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      data: [
+        { value: totalWork, name: '工作时长', itemStyle: { color: '#67C23A' } },
+        { value: totalIdle, name: '摸鱼时长', itemStyle: { color: '#F56C6C' } }
+      ]
+    }]
+  })
+}
+
 onMounted(async () => {
   const empRes = await getEmployees()
   employees.value = empRes.data || []
   const repRes = await getReports()
   reports.value = repRes.data || []
+  await nextTick()
+  initCharts()
 })
 </script>
