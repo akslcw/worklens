@@ -45,6 +45,17 @@ def upload_data(records):
         "employeeId": EMPLOYEE_ID,
         "records": items
     }
+
+    # 先尝试发送缓存数据
+    retry_cache()
+
+    # 发送当前数据
+    _do_upload(payload)
+
+
+def _do_upload(payload):
+    """实际发送数据，失败则缓存"""
+    from cache import save_cache
     try:
         response = requests.post(
             f"{SERVER_URL}/api/records/upload",
@@ -52,11 +63,42 @@ def upload_data(records):
             timeout=10
         )
         if response.status_code == 200:
-            print(f"[{datetime.datetime.now()}] 上报成功，共 {len(items)} 条记录")
+            print(f"[{datetime.datetime.now()}] 上报成功，共 {len(payload['records'])} 条记录")
         else:
-            print(f"[{datetime.datetime.now()}] 上报失败: {response.status_code}")
+            print(f"[{datetime.datetime.now()}] 上报失败: {response.status_code}，已缓存")
+            save_cache(payload)
     except Exception as e:
-        print(f"[{datetime.datetime.now()}] 上报异常: {e}")
+        print(f"[{datetime.datetime.now()}] 网络异常: {e}，已缓存")
+        save_cache(payload)
+
+
+def retry_cache():
+    """重试发送缓存数据"""
+    from cache import load_cache, clear_cache
+    cache = load_cache()
+    if not cache:
+        return
+    print(f"[{datetime.datetime.now()}] 发现 {len(cache)} 条缓存数据，尝试重新上报...")
+    success_all = True
+    for payload in cache:
+        payload.pop('cached_at', None)
+        try:
+            response = requests.post(
+                f"{SERVER_URL}/api/records/upload",
+                json=payload,
+                timeout=10
+            )
+            if response.status_code != 200:
+                success_all = False
+        except Exception:
+            success_all = False
+            break
+    if success_all:
+        clear_cache()
+        print(f"[{datetime.datetime.now()}] 缓存数据上报成功，已清空缓存")
+    else:
+        print(f"[{datetime.datetime.now()}] 缓存数据上报失败，下次再试")
+
 
 def main():
     print(f"[{datetime.datetime.now()}] WorkLens 客户端启动")

@@ -40,3 +40,9 @@ coverage/
 .env
 .env.*
 !.env.example
+
+
+client/upload_cache.json
+client/__pycache__/
+client/*.pyc
+client/.venv/
