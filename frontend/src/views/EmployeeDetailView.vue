@@ -52,7 +52,15 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { BarChart } from 'echarts/charts'
+import {
+  TooltipComponent,
+  GridComponent
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([BarChart, TooltipComponent, GridComponent, CanvasRenderer])
 import { getRecordsByRange } from '../api/record'
 
 const route = useRoute()
