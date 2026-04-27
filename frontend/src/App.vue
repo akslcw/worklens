@@ -32,6 +32,7 @@ const handleLogout = () => {
         <el-menu-item index="/employees">员工管理</el-menu-item>
         <el-menu-item index="/reports">效率报告</el-menu-item>
         <el-menu-item index="/categories">应用分类管理</el-menu-item>
+        <el-menu-item index="/monitor">实时监控</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>

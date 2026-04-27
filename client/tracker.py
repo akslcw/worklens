@@ -100,6 +100,22 @@ def retry_cache():
         print(f"[{datetime.datetime.now()}] 缓存数据上报失败，下次再试")
 
 
+def send_heartbeat(app_name, window_title):
+    """发送心跳，上报当前活跃应用"""
+    payload = {
+        "macAddress": get_mac_address(),
+        "currentApp": app_name,
+        "currentWindow": window_title
+    }
+    try:
+        requests.post(
+            f"{SERVER_URL}/api/heartbeat",
+            json=payload,
+            timeout=5
+        )
+    except Exception:
+        pass  # 心跳失败静默处理，不影响主流程
+
 def main():
     print(f"[{datetime.datetime.now()}] WorkLens 客户端启动")
     records = defaultdict(int)
@@ -109,16 +125,15 @@ def main():
         app_name, title = get_active_window()
         if app_name and title:
             records[(app_name, title)] += RECORD_INTERVAL
+            send_heartbeat(app_name, title)  # 发送心跳
 
         now = datetime.datetime.now()
 
-        # 每天到达上报时间自动上报
         if now.hour == UPLOAD_HOUR and now.minute == UPLOAD_MINUTE and not uploaded_today:
             upload_data(records)
             records.clear()
             uploaded_today = True
 
-        # 跨天重置
         if now.hour == 0 and now.minute == 1:
             uploaded_today = False
 

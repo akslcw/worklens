@@ -31,8 +31,10 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 放行登录接口和客户端上报接口
-        if (path.startsWith("/api/auth") || path.equals("/api/records/upload")) {
+        // 放行白名单接口
+        if (path.startsWith("/api/auth")
+                || path.equals("/api/records/upload")
+                || path.equals("/api/heartbeat")) {
             chain.doFilter(request, response);
             return;
         }

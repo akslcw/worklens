@@ -9,6 +9,8 @@
         <result column="device_name" property="deviceName"/>
         <result column="mac_address" property="macAddress"/>
         <result column="last_online" property="lastOnline"/>
+        <result column="current_app" property="currentApp"/>
+        <result column="current_window" property="currentWindow"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
@@ -33,4 +35,15 @@
         SELECT * FROM devices WHERE mac_address = #{macAddress}
     </select>
 
+    <update id="updateHeartbeat">
+        UPDATE devices
+        SET last_online = NOW(),
+            current_app = #{currentApp},
+            current_window = #{currentWindow}
+        WHERE mac_address = #{macAddress}
+    </update>
+
+    <select id="findAll" resultMap="BaseResultMap">
+        SELECT * FROM devices ORDER BY last_online DESC
+    </select>
 </mapper>

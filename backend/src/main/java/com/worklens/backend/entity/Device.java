@@ -11,4 +11,6 @@ public class Device {
     private String macAddress;
     private LocalDateTime lastOnline;
     private LocalDateTime createdAt;
+    private String currentApp;
+    private String currentWindow;
 }
