@@ -55,8 +55,12 @@ const employeeId = ref('')
 const date = ref('')
 
 const load = async () => {
-  const res = await getReports()
-  reports.value = res.data || []
+  try {
+    const res = await getReports()
+    reports.value = res.data || []
+  } catch (e) {
+    ElMessage.error('报告数据加载失败')
+  }
 }
 
 const handleTrigger = async () => {
@@ -64,8 +68,12 @@ const handleTrigger = async () => {
     ElMessage.warning('请填写员工ID和日期')
     return
   }
-  await triggerAnalysis(employeeId.value, date.value)
-  ElMessage.success('分析触发成功，请稍后刷新')
+  try {
+    await triggerAnalysis(employeeId.value, date.value)
+    ElMessage.success('分析触发成功，请稍后刷新')
+  } catch (e) {
+    ElMessage.error('触发失败')
+  }
 }
 
 onMounted(load)

@@ -50,14 +50,12 @@ let timer = null
 const load = async () => {
   const res = await getDevices()
   devices.value = res.data || []
-  console.log(devices.value)
 }
 
 const isOnline = (device) => {
   if (!device.lastOnline) return false
   const last = new Date(device.lastOnline + 'Z')  // 加Z表示UTC
   const now = new Date()
-  console.log('last:', last, 'now:', now, 'diff:', now - last)
   return (now - last) < 60 * 1000
 }
 

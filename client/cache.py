@@ -5,21 +5,32 @@ import datetime
 CACHE_FILE = "upload_cache.json"
 
 def save_cache(payload):
-    """保存失败的上报数据到本地缓存"""
     cache = load_cache()
     payload['cached_at'] = datetime.datetime.now().isoformat()
     cache.append(payload)
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    _atomic_write(cache)
 
 def load_cache():
-    """读取本地缓存"""
     if not os.path.exists(CACHE_FILE):
         return []
-    with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def remove_item(index):
+    cache = load_cache()
+    if 0 <= index < len(cache):
+        cache.pop(index)
+        _atomic_write(cache)
 
 def clear_cache():
-    """清空缓存"""
     if os.path.exists(CACHE_FILE):
         os.remove(CACHE_FILE)
+
+def _atomic_write(data):
+    tmp_file = CACHE_FILE + '.tmp'
+    with open(tmp_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_file, CACHE_FILE)

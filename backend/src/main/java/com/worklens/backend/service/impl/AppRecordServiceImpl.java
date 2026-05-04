@@ -1,5 +1,6 @@
 package com.worklens.backend.service.impl;
 
+import com.worklens.backend.common.exception.BusinessException;
 import com.worklens.backend.dto.UploadBatchDTO;
 import com.worklens.backend.dto.UploadRecordDTO;
 import com.worklens.backend.entity.AppRecord;
@@ -27,28 +28,17 @@ public class AppRecordServiceImpl implements AppRecordService {
         Device device = deviceMapper.selectByMac(dto.getMacAddress());
         if (device == null) {
             log.warn("未知设备上报数据, MAC: {}", dto.getMacAddress());
-            return;
+            throw new BusinessException(400, "设备未注册，请先在管理后台添加员工和设备");
         }
 
         for (UploadRecordDTO item : dto.getRecords()) {
-            AppRecord existing = appRecordMapper.selectByUniqueKey(
-                    device.getId(), item.getAppName(), item.getRecordDate()
-            );
-            if (existing != null) {
-                // 累加时长，不跳过
-                existing.setDurationSeconds(existing.getDurationSeconds() + item.getDurationSeconds());
-                appRecordMapper.updateDuration(existing.getId(), existing.getDurationSeconds());
-                log.info("累加时长: deviceId={}, app={}, +{}s",
-                        device.getId(), item.getAppName(), item.getDurationSeconds());
-            } else {
-                AppRecord record = new AppRecord();
-                record.setDeviceId(device.getId());
-                record.setAppName(item.getAppName());
-                record.setWindowTitle(item.getWindowTitle());
-                record.setDurationSeconds(item.getDurationSeconds());
-                record.setRecordDate(item.getRecordDate());
-                appRecordMapper.insertBatch(List.of(record));
-            }
+            AppRecord record = new AppRecord();
+            record.setDeviceId(device.getId());
+            record.setAppName(item.getAppName());
+            record.setWindowTitle(item.getWindowTitle());
+            record.setDurationSeconds(item.getDurationSeconds());
+            record.setRecordDate(item.getRecordDate());
+            appRecordMapper.insertBatch(List.of(record));
         }
     }
 

@@ -61,8 +61,12 @@ const showDialog = ref(false)
 const form = ref({ id: null, appName: '', category: '开发工具', isWork: true })
 
 const load = async () => {
-  const res = await getCategories()
-  categories.value = res.data || []
+  try {
+    const res = await getCategories()
+    categories.value = res.data || []
+  } catch (e) {
+    ElMessage.error('分类数据加载失败')
+  }
 }
 
 const handleEdit = (row) => {
@@ -76,22 +80,30 @@ const handleClose = () => {
 }
 
 const handleSubmit = async () => {
-  if (form.value.id) {
-    await updateCategory(form.value)
-    ElMessage.success('更新成功')
-  } else {
-    await addCategory(form.value)
-    ElMessage.success('添加成功')
+  try {
+    if (form.value.id) {
+      await updateCategory(form.value)
+      ElMessage.success('更新成功')
+    } else {
+      await addCategory(form.value)
+      ElMessage.success('添加成功')
+    }
+    handleClose()
+    load()
+  } catch (e) {
+    ElMessage.error('操作失败')
   }
-  handleClose()
-  load()
 }
 
 const handleDelete = async (id) => {
-  await ElMessageBox.confirm('确认删除该分类？', '提示', { type: 'warning' })
-  await deleteCategory(id)
-  ElMessage.success('删除成功')
-  load()
+  try {
+    await ElMessageBox.confirm('确认删除该分类？', '提示', { type: 'warning' })
+    await deleteCategory(id)
+    ElMessage.success('删除成功')
+    load()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
 }
 
 onMounted(load)

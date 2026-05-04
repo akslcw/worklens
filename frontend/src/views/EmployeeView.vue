@@ -46,23 +46,35 @@ const showDialog = ref(false)
 const form = ref({ name: '', employeeNo: '' })
 
 const load = async () => {
-  const res = await getEmployees()
-  employees.value = res.data || []
+  try {
+    const res = await getEmployees()
+    employees.value = res.data || []
+  } catch (e) {
+    ElMessage.error('员工数据加载失败')
+  }
 }
 
 const handleAdd = async () => {
-  await addEmployee(form.value)
-  ElMessage.success('添加成功')
-  showDialog.value = false
-  form.value = { name: '', employeeNo: '' }
-  load()
+  try {
+    await addEmployee(form.value)
+    ElMessage.success('添加成功')
+    showDialog.value = false
+    form.value = { name: '', employeeNo: '' }
+    load()
+  } catch (e) {
+    ElMessage.error('添加失败')
+  }
 }
 
 const handleDelete = async (id) => {
-  await ElMessageBox.confirm('确认删除该员工？', '提示', { type: 'warning' })
-  await deleteEmployee(id)
-  ElMessage.success('删除成功')
-  load()
+  try {
+    await ElMessageBox.confirm('确认删除该员工？', '提示', { type: 'warning' })
+    await deleteEmployee(id)
+    ElMessage.success('删除成功')
+    load()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
 }
 
 onMounted(load)

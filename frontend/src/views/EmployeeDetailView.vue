@@ -50,18 +50,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
-import {
-  TooltipComponent,
-  GridComponent
-} from 'echarts/components'
+import { TooltipComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { ElMessage } from 'element-plus'
+import { getRecordsByRange } from '../api/record'
 
 echarts.use([BarChart, TooltipComponent, GridComponent, CanvasRenderer])
-import { getRecordsByRange } from '../api/record'
 
 const route = useRoute()
 const employeeId = route.params.id
@@ -75,44 +73,50 @@ const barChart = ref(null)
 let chartInstance = null
 
 const load = async () => {
-  const res = await getRecordsByRange(employeeId, startDate.value, endDate.value)
-  tableData.value = res.data || []
+  try {
+    const res = await getRecordsByRange(employeeId, startDate.value, endDate.value)
+    tableData.value = res.data || []
 
-  // 按应用名聚合时长
-  const appMap = {}
-  tableData.value.forEach(r => {
-    appMap[r.appName] = (appMap[r.appName] || 0) + r.durationSeconds
-  })
+    const appMap = {}
+    tableData.value.forEach(r => {
+      appMap[r.appName] = (appMap[r.appName] || 0) + r.durationSeconds
+    })
 
-  // 取 Top 10 排序
-  const sorted = Object.entries(appMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
+    const sorted = Object.entries(appMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
 
-  const appNames = sorted.map(([name]) => name)
-  const durations = sorted.map(([, sec]) => Math.round(sec / 60))
+    const appNames = sorted.map(([name]) => name)
+    const durations = sorted.map(([, sec]) => Math.round(sec / 60))
 
-  await nextTick()
-  if (!chartInstance) {
-    chartInstance = echarts.init(barChart.value)
+    await nextTick()
+    if (!chartInstance) {
+      chartInstance = echarts.init(barChart.value)
+    }
+    chartInstance.setOption({
+      tooltip: { trigger: 'axis', formatter: '{b}: {c} 分钟' },
+      grid: { left: '20%' },
+      xAxis: { type: 'value', name: '分钟' },
+      yAxis: {
+        type: 'category',
+        data: appNames,
+        axisLabel: { fontSize: 12 }
+      },
+      series: [{
+        type: 'bar',
+        data: durations,
+        itemStyle: { color: '#409EFF' },
+        label: { show: true, position: 'right', formatter: '{c} min' }
+      }]
+    })
+  } catch (e) {
+    ElMessage.error('数据加载失败，请重试')
   }
-  chartInstance.setOption({
-    tooltip: { trigger: 'axis', formatter: '{b}: {c} 分钟' },
-    grid: { left: '20%' },
-    xAxis: { type: 'value', name: '分钟' },
-    yAxis: {
-      type: 'category',
-      data: appNames,
-      axisLabel: { fontSize: 12 }
-    },
-    series: [{
-      type: 'bar',
-      data: durations,
-      itemStyle: { color: '#409EFF' },
-      label: { show: true, position: 'right', formatter: '{c} min' }
-    }]
-  })
 }
 
 onMounted(load)
+
+onUnmounted(() => {
+  chartInstance?.dispose()
+})
 </script>

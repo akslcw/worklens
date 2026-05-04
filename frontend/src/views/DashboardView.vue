@@ -70,25 +70,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart } from 'echarts/charts'
 import {
-  TitleComponent,
   TooltipComponent,
   GridComponent,
   LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-
-echarts.use([LineChart, PieChart, TitleComponent, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer])
+import { ElMessage } from 'element-plus'
 import { getEmployees } from '../api/employee'
 import { getReports } from '../api/report'
+
+echarts.use([LineChart, PieChart, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer])
 
 const employees = ref([])
 const reports = ref([])
 const lineChart = ref(null)
 const pieChart = ref(null)
+let lineInstance = null
+let pieInstance = null
 
 const employeeCount = computed(() => employees.value.length)
 const reportCount = computed(() => reports.value.length)
@@ -99,9 +101,8 @@ const avgScore = computed(() => {
 })
 
 const initCharts = () => {
-  // 折线图：效率评分趋势
-  const line = echarts.init(lineChart.value)
-  line.setOption({
+  lineInstance = echarts.init(lineChart.value)
+  lineInstance.setOption({
     tooltip: { trigger: 'axis' },
     xAxis: {
       type: 'category',
@@ -118,11 +119,10 @@ const initCharts = () => {
     }]
   })
 
-  // 饼图：工作/摸鱼时长
   const totalWork = reports.value.reduce((acc, r) => acc + r.workSeconds, 0)
   const totalIdle = reports.value.reduce((acc, r) => acc + r.idleSeconds, 0)
-  const pie = echarts.init(pieChart.value)
-  pie.setOption({
+  pieInstance = echarts.init(pieChart.value)
+  pieInstance.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {d}%' },
     legend: { bottom: 0 },
     series: [{
@@ -137,11 +137,19 @@ const initCharts = () => {
 }
 
 onMounted(async () => {
-  const empRes = await getEmployees()
-  employees.value = empRes.data || []
-  const repRes = await getReports()
-  reports.value = repRes.data || []
-  await nextTick()
-  initCharts()
+  try {
+    const [empRes, repRes] = await Promise.all([getEmployees(), getReports()])
+    employees.value = empRes.data || []
+    reports.value = repRes.data || []
+    await nextTick()
+    initCharts()
+  } catch (e) {
+    ElMessage.error('数据加载失败，请刷新重试')
+  }
+})
+
+onUnmounted(() => {
+  lineInstance?.dispose()
+  pieInstance?.dispose()
 })
 </script>

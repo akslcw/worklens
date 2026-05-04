@@ -54,7 +54,6 @@ def upload_data(records):
 
 
 def _do_upload(payload):
-    """实际发送数据，失败则缓存"""
     from cache import save_cache
     try:
         response = requests.post(
@@ -63,7 +62,12 @@ def _do_upload(payload):
             timeout=10
         )
         if response.status_code == 200:
-            print(f"[{datetime.datetime.now()}] 上报成功，共 {len(payload['records'])} 条记录")
+            result = response.json()
+            if result.get('code') == 200:
+                print(f"[{datetime.datetime.now()}] 上报成功，共 {len(payload['records'])} 条记录")
+            else:
+                print(f"[{datetime.datetime.now()}] 上报失败: {result.get('message')}，已缓存")
+                save_cache(payload)
         else:
             print(f"[{datetime.datetime.now()}] 上报失败: {response.status_code}，已缓存")
             save_cache(payload)
@@ -73,14 +77,15 @@ def _do_upload(payload):
 
 
 def retry_cache():
-    """重试发送缓存数据"""
-    from cache import load_cache, clear_cache
+    from cache import load_cache, remove_item
     cache = load_cache()
     if not cache:
         return
     print(f"[{datetime.datetime.now()}] 发现 {len(cache)} 条缓存数据，尝试重新上报...")
-    success_all = True
-    for payload in cache:
+
+    i = 0
+    while i < len(cache):
+        payload = dict(cache[i])
         payload.pop('cached_at', None)
         try:
             response = requests.post(
@@ -88,17 +93,14 @@ def retry_cache():
                 json=payload,
                 timeout=10
             )
-            if response.status_code != 200:
-                success_all = False
+            if response.status_code == 200 and response.json().get('code') == 200:
+                remove_item(i)
+                cache = load_cache()
+                print(f"[{datetime.datetime.now()}] 缓存第 {i + 1} 条上报成功")
+            else:
+                i += 1
         except Exception:
-            success_all = False
-            break
-    if success_all:
-        clear_cache()
-        print(f"[{datetime.datetime.now()}] 缓存数据上报成功，已清空缓存")
-    else:
-        print(f"[{datetime.datetime.now()}] 缓存数据上报失败，下次再试")
-
+            i += 1
 
 def send_heartbeat(app_name, window_title):
     """发送心跳，上报当前活跃应用"""

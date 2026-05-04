@@ -14,6 +14,8 @@ CREATE TABLE devices (
     device_name VARCHAR(100) COMMENT '电脑名称',
     mac_address VARCHAR(50) UNIQUE NOT NULL COMMENT 'MAC地址',
     last_online DATETIME COMMENT '最后上线时间',
+    current_app VARCHAR(100) COMMENT '当前使用应用',
+    current_window VARCHAR(255) COMMENT '当前窗口标题',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
@@ -33,6 +35,7 @@ CREATE TABLE app_records (
     duration_seconds INT NOT NULL,
     record_date DATE NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_record (device_id, app_name, record_date),
     FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 
@@ -48,6 +51,16 @@ CREATE TABLE daily_reports (
     UNIQUE KEY uq_employee_date (employee_id, report_date),
     FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
+
+CREATE TABLE admins (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(100) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO admins (username, password)
+VALUES ('admin', '$2a$10$Yeev6VZ3YkvaPiF89SH.cexI2TFVSR4tvHd5wO2y0oIIKa0pmSmgS');
 
 -- 演示数据
 INSERT INTO employees (name, employee_no) VALUES ('张三', 'EMP001'), ('李四', 'EMP002');

@@ -13,12 +13,15 @@
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
-    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertBatch">
         INSERT INTO app_records (device_id, app_name, window_title, duration_seconds, record_date)
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.deviceId}, #{item.appName}, #{item.windowTitle}, #{item.durationSeconds}, #{item.recordDate})
         </foreach>
+        ON DUPLICATE KEY UPDATE
+        duration_seconds = duration_seconds + VALUES(duration_seconds),
+        window_title = VALUES(window_title)
     </insert>
 
     <select id="findByDeviceIdAndDate" resultMap="BaseResultMap">
