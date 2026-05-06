@@ -13,7 +13,6 @@ mybatis:
   type-aliases-package: com.worklens.backend.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 deepseek:
   api-key: ${DEEPSEEK_API_KEY:your-key-here}

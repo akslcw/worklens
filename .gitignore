@@ -46,3 +46,5 @@ client/upload_cache.json
 client/__pycache__/
 client/*.pyc
 client/.venv/
+
+frontend/.env.production
