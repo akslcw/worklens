@@ -10,6 +10,7 @@ import {
   type DetailAccessRequest,
 } from '../api/detailAccessRequests'
 import type { UsageAppCard, UsageView } from '../api/usageRecords'
+import { logout } from '../api/auth'
 import { clearSession, readStoredSession } from '../auth/session'
 import ManagerWorkspaceNav from '../components/ManagerWorkspaceNav.vue'
 import { hongKongDateString, hongKongDateTimeString, hongKongTimeString } from '../utils/hongKongTime'
@@ -115,7 +116,11 @@ async function handleViewApprovedRequest(request: DetailAccessRequest) {
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 

@@ -198,20 +198,23 @@
 
 **证据**：提交见 git log（"Soft-delete employees and keep profiles consistent (H5)"）。
 
-## H6 · 改密后旧 token 不吊销、无登出接口 [ ]
+## H6 · 改密后旧 token 不吊销、无登出接口 [x] 已修复
 
-**位置**：`AuthServiceImpl.java:183-198`（changePassword）、`AuthController`。
+**位置**：`AuthServiceImpl`（changePassword/logout）、`AuthController`（新增 `/auth/logout`）、`AuthService`、`AuthTokenFilter`、`EmployeeServiceImpl`（重置密码吊销 token）；前端 `api/auth.ts`、六个视图的登出与改密流程。
 
 **问题**：改密/重置密码后已签发 token 继续有效至 24h（被盗 token 在改密后仍可操作）；无登出接口（前端只是清本地存储）。
 
-**修复方案**：
-1. `changePassword` 与 `resetEmployeePassword` 成功后删除该用户全部 `auth_tokens`；
-2. 新增 `POST /auth/logout`：删除当前 token 并返回 204；
-3. 过滤器把 `/auth/logout` 加入需认证路径（默认即可，无需白名单）；前端登出按钮调用接口后再清本地存储。
+**修复方案（已实施）**：
+1. `changePassword` 成功后删除该用户全部 `auth_tokens`；`resetEmployeePassword` 同样吊销（事务内）；
+2. 新增 `POST /auth/logout`：吊销当前 Authorization 头中的 token，返回 204；过滤器把该路径加入强制改密用户可访问白名单；
+3. 前端新增 `logout(token)` API；六个视图登出时先调用接口再清本地存储（失败静默）；改密成功后清空会话并引导"前往登录"重新登录（因为旧 token 已吊销）。
 
 **验收标准**：
-- 集成测试：改密后用旧 token 请求业务接口返回 401；`/auth/logout` 后原 token 立即失效；
-- 前端登出仍正常工作。
+- [x] 集成测试（`AuthTokenLifecycleIntegrationTests` 4 用例）：改密后旧 token 401 且新密码可登录；登出后当前 token 401；登出需认证；重置密码后员工旧 token 401 且新临时密码可登录；
+- [x] 前端改密流程测试更新为"清会话 + 前往登录"；
+- [x] 全量后端 122/122、前端 35/35、生产构建通过。
+
+**证据**：提交见 git log（"Revoke tokens on password change and add logout (H6)"）。
 
 ## H7 · 桌面客户端凭据暴露面 [ ]
 

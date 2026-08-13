@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { changePassword } from '../api/auth'
-import { clearSession, persistSession, readStoredSession, resolveHomePath } from '../auth/session'
+import { changePassword, logout } from '../api/auth'
+import { clearSession, readStoredSession } from '../auth/session'
 
 const router = useRouter()
 const session = readStoredSession()
@@ -34,11 +34,7 @@ async function handleChangePassword() {
       session.token,
     )
 
-    persistSession({
-      ...session,
-      username: response.username,
-      mustChangePassword: response.mustChangePassword,
-    })
+    clearSession()
     passwordChanged.value = true
     form.currentPassword = ''
     form.newPassword = ''
@@ -50,15 +46,16 @@ async function handleChangePassword() {
 }
 
 async function handleContinue() {
-  if (!session) {
-    return
-  }
   passwordChanged.value = false
-  await router.replace(resolveHomePath(session.role))
+  await router.replace('/login')
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 </script>
@@ -74,9 +71,9 @@ async function handleLogout() {
 
       <div v-if="passwordChanged" data-test="change-password-success" class="success-panel" role="status">
         <strong>密码已修改</strong>
-        <p>新密码已安全保存，请使用新密码继续登录和使用 WorkLens。</p>
+        <p>出于安全考虑，修改密码后需要重新登录。请使用新密码登录 WorkLens。</p>
         <button data-test="continue-after-password-change" class="primary-button" type="button" @click="handleContinue">
-          进入 WorkLens
+          前往登录
         </button>
       </div>
 

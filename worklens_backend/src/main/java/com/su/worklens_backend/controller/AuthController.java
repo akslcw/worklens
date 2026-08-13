@@ -8,6 +8,7 @@ import com.su.worklens_backend.dto.PasswordChangeResponse;
 import com.su.worklens_backend.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,5 +41,11 @@ public class AuthController {
             @Valid @RequestBody ChangePasswordRequest changePasswordRequest
     ) {
         return authService.changePassword(request, changePasswordRequest);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        authService.logout(request.getHeader("Authorization"));
+        return ResponseEntity.noContent().build();
     }
 }

@@ -5,6 +5,7 @@ import ManagerWorkspaceNav from '../components/ManagerWorkspaceNav.vue'
 import { clearSession, readStoredSession } from '../auth/session'
 import { getTeamUsageSummary, type AppUsageRatio, type TeamUsageSummary } from '../api/teamUsage'
 import { getTeamReportHistory, type ReportHistoryItem } from '../api/teamReports'
+import { logout } from '../api/auth'
 import { hongKongDateTimeString } from '../utils/hongKongTime'
 
 const router = useRouter()
@@ -45,7 +46,11 @@ async function loadManagerTeamView() {
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 

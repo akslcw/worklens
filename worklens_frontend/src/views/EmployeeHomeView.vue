@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getEmployeeReportHistory } from '../api/employeeReports'
 import type { ReportHistoryItem } from '../api/teamReports'
 import { getUsageView, type UsageAppCard, type UsageView } from '../api/usageRecords'
+import { logout } from '../api/auth'
 import { clearSession, readStoredSession } from '../auth/session'
 import EmployeeWorkspaceNav from '../components/EmployeeWorkspaceNav.vue'
 import { hongKongDateString, hongKongDateTimeString, hongKongTimeString } from '../utils/hongKongTime'
@@ -95,7 +96,11 @@ async function handleNextUsagePage() {
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 

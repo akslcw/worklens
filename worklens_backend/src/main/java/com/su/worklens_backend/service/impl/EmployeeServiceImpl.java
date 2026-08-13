@@ -139,6 +139,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
+    @Transactional
     public ResetEmployeePasswordResponse resetEmployeePassword(Long id, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, MANAGER_ROLE);
         Employee employee = findActiveEmployee(id);
@@ -153,6 +154,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         authUser.setPasswordHash(passwordHasher.hash(temporaryPassword));
         authUser.setMustChangePassword(true);
         authUserMapper.updateById(authUser);
+        authTokenMapper.delete(new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getUserId, authUser.getId()));
         return new ResetEmployeePasswordResponse(authUser.getUsername(), temporaryPassword, true);
     }
 

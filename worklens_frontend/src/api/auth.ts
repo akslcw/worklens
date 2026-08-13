@@ -1,5 +1,5 @@
 import type { RouteRole } from '../auth/types'
-import { request } from './http'
+import { request, requestVoid } from './http'
 
 export type LoginPayload = {
   username: string
@@ -55,4 +55,8 @@ export async function changePassword(payload: ChangePasswordPayload, token: stri
     },
     token,
   )
+}
+
+export async function logout(token: string) {
+  await requestVoid('/auth/logout', { method: 'POST' }, token)
 }

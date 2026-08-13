@@ -17,7 +17,7 @@ describe('ChangePasswordView', () => {
     vi.restoreAllMocks()
   })
 
-  it('confirms a successful change without rendering the new password', async () => {
+  it('confirms a successful change, clears the revoked session and sends the user to login', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -50,14 +50,12 @@ describe('ChangePasswordView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/change-password')
     expect(wrapper.get('[data-test="change-password-success"]').text()).toContain('密码已修改')
     expect(wrapper.get('[data-test="change-password-success"]').text()).not.toContain('Changed123!')
-    expect(JSON.parse(sessionStorage.getItem('worklens-session') ?? '{}')).toMatchObject({
-      mustChangePassword: false,
-    })
+    expect(sessionStorage.getItem('worklens-session')).toBeNull()
 
     await wrapper.get('[data-test="continue-after-password-change"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/employee')
+    expect(router.currentRoute.value.fullPath).toBe('/login')
   })
 })
 
@@ -66,7 +64,7 @@ async function mountChangePassword() {
     history: createMemoryHistory(),
     routes: [
       { path: '/change-password', component: ChangePasswordView },
-      { path: '/employee', component: { template: '<div />' } },
+      { path: '/login', component: { template: '<div />' } },
     ],
   })
 

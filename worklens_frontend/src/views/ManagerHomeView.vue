@@ -9,6 +9,7 @@ import {
   type Employee,
   type ResetEmployeePasswordResponse,
 } from '../api/employees'
+import { logout } from '../api/auth'
 import { clearSession, readStoredSession } from '../auth/session'
 import ManagerWorkspaceNav from '../components/ManagerWorkspaceNav.vue'
 import { hongKongDateTimeString } from '../utils/hongKongTime'
@@ -118,7 +119,11 @@ async function handleResetPassword(id: number) {
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 

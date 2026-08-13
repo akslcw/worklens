@@ -115,6 +115,11 @@ class UsageRecordServiceImplTests {
             public PasswordChangeResponse changePassword(HttpServletRequest request, ChangePasswordRequest changePasswordRequest) {
                 throw new UnsupportedOperationException("not used in this test");
             }
+
+            @Override
+            public void logout(String bearerToken) {
+                throw new UnsupportedOperationException("not used in this test");
+            }
         };
     }
 }

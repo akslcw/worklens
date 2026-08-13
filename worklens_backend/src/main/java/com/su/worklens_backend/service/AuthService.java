@@ -23,6 +23,11 @@ public interface AuthService {
     PasswordChangeResponse changePassword(HttpServletRequest request, ChangePasswordRequest changePasswordRequest);
 
     /**
+     * Revokes the token presented in the Authorization header, if any.
+     */
+    void logout(String bearerToken);
+
+    /**
      * Role assertion used as defense in depth inside service implementations.
      * The {@code AuthTokenFilter} performs the primary path-based role checks,
      * but services must never rely on the filter alone: this guard makes any

@@ -22,6 +22,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     private static final String HEALTH_PATH = "/health";
     private static final String CURRENT_USER_PATH = "/auth/me";
     private static final String CHANGE_PASSWORD_PATH = "/auth/change-password";
+    private static final String LOGOUT_PATH = "/auth/logout";
     private static final String EMPLOYEES_PATH_PREFIX = "/employees";
     private static final String USAGE_RECORDS_PATH_PREFIX = "/usage-records";
     private static final String TEAM_USAGE_SUMMARY_PATH = "/team-usage-summary";
@@ -65,7 +66,8 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         request.setAttribute(AuthServiceImpl.CURRENT_USER_ATTRIBUTE, authenticatedUser);
         if (authenticatedUser.isMustChangePassword()
                 && !CURRENT_USER_PATH.equals(requestPath)
-                && !CHANGE_PASSWORD_PATH.equals(requestPath)) {
+                && !CHANGE_PASSWORD_PATH.equals(requestPath)
+                && !LOGOUT_PATH.equals(requestPath)) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Password change required");
             return;
         }

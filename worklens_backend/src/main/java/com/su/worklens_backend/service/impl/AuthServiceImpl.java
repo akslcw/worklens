@@ -194,7 +194,20 @@ public class AuthServiceImpl implements AuthService {
         authUser.setPasswordHash(passwordHasher.hash(changePasswordRequest.getNewPassword()));
         authUser.setMustChangePassword(false);
         authUserMapper.updateById(authUser);
+        authTokenMapper.delete(
+                new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getUserId, authUser.getId())
+        );
         return new PasswordChangeResponse(authUser.getUsername(), false);
+    }
+
+    @Override
+    public void logout(String bearerToken) {
+        String tokenValue = bearerToken.startsWith("Bearer ") ? bearerToken.substring(7).trim() : bearerToken.trim();
+        if (!tokenValue.isEmpty()) {
+            authTokenMapper.delete(
+                    new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, tokenValue)
+            );
+        }
     }
 
     private String resolveDisplayName(AuthUser authUser) {

@@ -7,6 +7,7 @@ import {
   type EmployeeDetailAccessRequest,
 } from '../api/detailAccessRequests'
 import { clearSession, readStoredSession } from '../auth/session'
+import { logout } from '../api/auth'
 import EmployeeWorkspaceNav from '../components/EmployeeWorkspaceNav.vue'
 import { hongKongDateTimeString } from '../utils/hongKongTime'
 
@@ -68,7 +69,11 @@ async function handleDecision(request: EmployeeDetailAccessRequest, decision: 'A
 }
 
 async function handleLogout() {
+  const token = session?.token
   clearSession()
+  if (token) {
+    await logout(token).catch(() => {})
+  }
   await router.replace('/login')
 }
 
