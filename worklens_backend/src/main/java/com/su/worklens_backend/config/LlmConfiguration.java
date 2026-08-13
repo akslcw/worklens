@@ -22,7 +22,12 @@ public class LlmConfiguration {
             @Value("${worklens.llm.deepseek.read-timeout}") Duration readTimeout
     ) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException("DeepSeek API key must be configured");
+            // Keep the application bootable without a real key (documented
+            // behaviour): every LLM call fails with a clear message and the
+            // report pipeline retains its source data.
+            return prompt -> {
+                throw new IllegalStateException("DeepSeek API key is not configured");
+            };
         }
         return new DeepSeekLlmProvider(
                 restTemplateBuilder

@@ -25,8 +25,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -126,13 +130,14 @@ public class AuthServiceImpl implements AuthService {
         );
         AuthToken authToken = new AuthToken();
         authToken.setUserId(authUser.getId());
-        authToken.setToken(UUID.randomUUID().toString().replace("-", ""));
+        String tokenValue = UUID.randomUUID().toString().replace("-", "");
+        authToken.setToken(sha256Hex(tokenValue));
         authToken.setCreatedAt(now);
         authToken.setExpiresAt(now.plusHours(TOKEN_TTL_HOURS));
         authTokenMapper.insert(authToken);
 
         return new LoginResponse(
-                authToken.getToken(),
+                tokenValue,
                 authUser.getUsername(),
                 resolveDisplayName(authUser),
                 authUser.getRole(),
@@ -152,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         AuthToken authToken = authTokenMapper.selectOne(
-                new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, tokenValue)
+                new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, sha256Hex(tokenValue))
         );
 
         if (authToken == null || authToken.getExpiresAt().isBefore(LocalDateTime.now(clock))) {
@@ -245,8 +250,17 @@ public class AuthServiceImpl implements AuthService {
         String tokenValue = bearerToken.startsWith("Bearer ") ? bearerToken.substring(7).trim() : bearerToken.trim();
         if (!tokenValue.isEmpty()) {
             authTokenMapper.delete(
-                    new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, tokenValue)
+                    new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, sha256Hex(tokenValue))
             );
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
         }
     }
 

@@ -14,7 +14,7 @@ import java.util.Base64;
 public class Pbkdf2PasswordHasher implements PasswordHasher {
 
     private static final String PREFIX = "pbkdf2_sha256";
-    private static final int ITERATIONS = 120000;
+    private static final int ITERATIONS = 600_000;
     private static final int KEY_LENGTH = 256;
     private static final int SALT_SIZE = 16;
 

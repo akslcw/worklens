@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -125,6 +126,23 @@ class AuthTokenLifecycleIntegrationTests extends PostgresIntegrationTestSupport 
 
         login("employee.alice", "A".repeat(65))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void storedTokensAreHashedNotPlaintext() throws Exception {
+        insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        String token = loginAndReadToken("employee.alice", PASSWORD);
+
+        String storedToken = jdbcTemplate.queryForObject(
+                "SELECT token FROM auth_tokens",
+                String.class
+        );
+
+        assertThat(storedToken).hasSize(64).isNotEqualTo(token);
+
+        mockMvc.perform(get("/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
     }
 
     @Test

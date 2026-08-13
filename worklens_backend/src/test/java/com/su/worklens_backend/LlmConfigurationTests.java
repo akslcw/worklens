@@ -25,17 +25,19 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 class LlmConfigurationTests {
 
     @Test
-    void llmProviderRejectsBlankApiKeyAtStartup() {
-        assertThatThrownBy(() -> new LlmConfiguration().llmProvider(
+    void llmProviderWithBlankApiKeyStillBootsAndFailsCallsClearly() {
+        LlmProvider provider = new LlmConfiguration().llmProvider(
                 new RestTemplateBuilder(),
                 "https://api.deepseek.com",
                 "   ",
                 "deepseek-v4-flash",
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("DeepSeek API key must be configured");
+        );
+
+        assertThatThrownBy(() -> provider.generateText("prompt"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("DeepSeek API key is not configured");
     }
 
     @Test
