@@ -44,21 +44,21 @@ class ReportGenerationSchedulerTests {
     }
 
     @Test
-    void weeklyReportGenerationUsesConfiguredCronAndHongKongTimezone() throws Exception {
+    void weeklyReportGenerationUsesStaggeredCronAndHongKongTimezone() throws Exception {
         Method method = ReportGenerationScheduler.class.getDeclaredMethod("generateWeeklyReports");
 
         Scheduled scheduled = method.getAnnotation(Scheduled.class);
 
         assertThat(scheduled).isNotNull();
-        assertThat(scheduled.cron()).isEqualTo("${worklens.reports.weekly-cron:0 55 23 * * SUN}");
+        assertThat(scheduled.cron()).isEqualTo("${worklens.reports.weekly-cron:0 30 0 * * MON}");
         assertThat(scheduled.zone()).isEqualTo("${worklens.reports.zone:Asia/Hong_Kong}");
     }
 
     @Test
-    void weeklyReportGenerationUsesCurrentDateFromClock() {
+    void weeklyReportGenerationRunsOnMondayForTheWeekEndingSunday() {
         ReportGenerationService reportGenerationService = mock(ReportGenerationService.class);
         Clock clock = Clock.fixed(
-                Instant.parse("2026-07-12T15:55:00Z"),
+                Instant.parse("2026-07-12T16:30:00Z"),
                 ZoneId.of("Asia/Hong_Kong")
         );
         ReportGenerationScheduler scheduler = new ReportGenerationScheduler(reportGenerationService, clock);
@@ -69,21 +69,21 @@ class ReportGenerationSchedulerTests {
     }
 
     @Test
-    void monthlyReportGenerationUsesConfiguredCronAndHongKongTimezone() throws Exception {
+    void monthlyReportGenerationUsesStaggeredCronAndHongKongTimezone() throws Exception {
         Method method = ReportGenerationScheduler.class.getDeclaredMethod("generateMonthlyReports");
 
         Scheduled scheduled = method.getAnnotation(Scheduled.class);
 
         assertThat(scheduled).isNotNull();
-        assertThat(scheduled.cron()).isEqualTo("${worklens.reports.monthly-cron:0 55 23 28-31 * *}");
+        assertThat(scheduled.cron()).isEqualTo("${worklens.reports.monthly-cron:0 0 1 * * *}");
         assertThat(scheduled.zone()).isEqualTo("${worklens.reports.zone:Asia/Hong_Kong}");
     }
 
     @Test
-    void monthlyReportGenerationRunsOnMonthEndDateFromClock() {
+    void monthlyReportGenerationRunsOnFirstDayForPreviousMonthEnd() {
         ReportGenerationService reportGenerationService = mock(ReportGenerationService.class);
         Clock clock = Clock.fixed(
-                Instant.parse("2026-07-31T15:55:00Z"),
+                Instant.parse("2026-07-31T17:00:00Z"),
                 ZoneId.of("Asia/Hong_Kong")
         );
         ReportGenerationScheduler scheduler = new ReportGenerationScheduler(reportGenerationService, clock);
@@ -94,16 +94,16 @@ class ReportGenerationSchedulerTests {
     }
 
     @Test
-    void monthlyReportGenerationSkipsNonMonthEndDate() {
+    void monthlyReportGenerationSkipsWhenYesterdayIsNotMonthEnd() {
         ReportGenerationService reportGenerationService = mock(ReportGenerationService.class);
         Clock clock = Clock.fixed(
-                Instant.parse("2026-07-30T15:55:00Z"),
+                Instant.parse("2026-08-01T17:00:00Z"),
                 ZoneId.of("Asia/Hong_Kong")
         );
         ReportGenerationScheduler scheduler = new ReportGenerationScheduler(reportGenerationService, clock);
 
         scheduler.generateMonthlyReports();
 
-        verify(reportGenerationService, never()).generateMonthlyReports(LocalDate.of(2026, 7, 30));
+        verify(reportGenerationService, never()).generateMonthlyReports(LocalDate.of(2026, 8, 1));
     }
 }

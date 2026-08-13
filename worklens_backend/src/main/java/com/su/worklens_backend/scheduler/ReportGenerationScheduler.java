@@ -7,6 +7,19 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.LocalDate;
 
+/**
+ * Report tasks are staggered so each layer always consumes the completed
+ * output of the layer below it, even with the single-threaded scheduler:
+ *
+ * <pre>
+ *   daily   23:55 every day          (raw usage records of the same day)
+ *   weekly  00:30 Monday             (daily reports of the week ending yesterday/Sunday)
+ *   monthly 01:00 on the 1st         (weekly reports of the month ending yesterday)
+ * </pre>
+ *
+ * Weekly and monthly compute the report date as "yesterday" because they run
+ * on the first day after the reporting period closes.
+ */
 @Component
 public class ReportGenerationScheduler {
 
@@ -23,16 +36,16 @@ public class ReportGenerationScheduler {
         reportGenerationService.generateDailyReports(LocalDate.now(clock));
     }
 
-    @Scheduled(cron = "${worklens.reports.weekly-cron:0 55 23 * * SUN}", zone = "${worklens.reports.zone:Asia/Hong_Kong}")
+    @Scheduled(cron = "${worklens.reports.weekly-cron:0 30 0 * * MON}", zone = "${worklens.reports.zone:Asia/Hong_Kong}")
     public void generateWeeklyReports() {
-        reportGenerationService.generateWeeklyReports(LocalDate.now(clock));
+        reportGenerationService.generateWeeklyReports(LocalDate.now(clock).minusDays(1));
     }
 
-    @Scheduled(cron = "${worklens.reports.monthly-cron:0 55 23 28-31 * *}", zone = "${worklens.reports.zone:Asia/Hong_Kong}")
+    @Scheduled(cron = "${worklens.reports.monthly-cron:0 0 1 * * *}", zone = "${worklens.reports.zone:Asia/Hong_Kong}")
     public void generateMonthlyReports() {
-        LocalDate today = LocalDate.now(clock);
-        if (today.equals(today.withDayOfMonth(today.lengthOfMonth()))) {
-            reportGenerationService.generateMonthlyReports(today);
+        LocalDate reportDate = LocalDate.now(clock).minusDays(1);
+        if (reportDate.equals(reportDate.withDayOfMonth(reportDate.lengthOfMonth()))) {
+            reportGenerationService.generateMonthlyReports(reportDate);
         }
     }
 }
