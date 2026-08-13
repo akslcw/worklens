@@ -116,6 +116,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     public UsageRecordResponse createUsageRecord(UsageRecordRequest request, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         validateRecordWindow(request);
+        String appName = sanitizeAppName(request.getAppName());
 
         String clientRecordId = normalizeClientRecordId(request.getClientRecordId());
         if (clientRecordId != null) {
@@ -131,7 +132,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
                         .orderByDesc(UsageRecord::getEndedAt, UsageRecord::getId)
                         .last("LIMIT 1")
         );
-        if (canMergeIntoLatestRecord(latestRecord, request)) {
+        if (canMergeIntoLatestRecord(latestRecord, appName, request)) {
             boolean changed = false;
             if (request.getEndedAt().isAfter(latestRecord.getEndedAt())) {
                 latestRecord.setEndedAt(request.getEndedAt());
@@ -149,7 +150,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
 
         UsageRecord usageRecord = new UsageRecord();
         usageRecord.setEmployeeId(authenticatedUser.getEmployeeId());
-        usageRecord.setAppName(request.getAppName().trim());
+        usageRecord.setAppName(appName);
         usageRecord.setStartedAt(request.getStartedAt());
         usageRecord.setEndedAt(request.getEndedAt());
         usageRecord.setCreatedAt(LocalDateTime.now(clock));
@@ -184,6 +185,20 @@ public class UsageRecordServiceImpl implements UsageRecordService {
             return null;
         }
         return clientRecordId.trim();
+    }
+
+    /**
+     * M3: app names are client-controlled strings that later reach LLM
+     * prompts. Strip control characters (including newlines), collapse
+     * whitespace and cap the length so a forged name cannot inject
+     * instructions or break the prompt layout.
+     */
+    static String sanitizeAppName(String appName) {
+        String cleaned = appName
+                .replaceAll("\\p{Cc}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return cleaned.length() > 60 ? cleaned.substring(0, 60) : cleaned;
     }
 
     /**
@@ -350,11 +365,11 @@ public class UsageRecordServiceImpl implements UsageRecordService {
         }
     }
 
-    private boolean canMergeIntoLatestRecord(UsageRecord latestRecord, UsageRecordRequest request) {
+    private boolean canMergeIntoLatestRecord(UsageRecord latestRecord, String appName, UsageRecordRequest request) {
         if (latestRecord == null) {
             return false;
         }
-        if (!latestRecord.getAppName().equals(request.getAppName().trim())) {
+        if (!latestRecord.getAppName().equals(appName)) {
             return false;
         }
         long gapSeconds = Duration.between(latestRecord.getEndedAt(), request.getStartedAt()).getSeconds();

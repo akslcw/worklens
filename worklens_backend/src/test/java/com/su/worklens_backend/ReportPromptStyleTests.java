@@ -37,6 +37,7 @@ class ReportPromptStyleTests {
         assertThat(prompt).contains("Do not use Markdown");
         assertThat(prompt).contains("encouraging daily personal productivity summary");
         assertThat(prompt).contains("Structured app usage");
+        assertThat(prompt).contains("untrusted input");
         assertThat(prompt).doesNotContain("Employee id");
     }
 
@@ -70,6 +71,7 @@ class ReportPromptStyleTests {
         assertThat(prompt).contains("Do not mention names, employee identifiers, usernames, or raw activity records");
         assertThat(prompt).contains("activeEmployeeCount: 2");
         assertThat(prompt).contains("totalUsageSeconds: 4500");
+        assertThat(prompt).contains("untrusted input");
         assertThat(prompt).doesNotContain("Alice");
         assertThat(prompt).doesNotContain("E001");
         assertThat(prompt).doesNotContain("employeeId");

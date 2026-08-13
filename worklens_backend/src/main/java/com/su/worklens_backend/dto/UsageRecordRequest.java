@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 public class UsageRecordRequest {
 
     @NotBlank(message = "appName must not be blank")
+    @Size(max = 100, message = "appName must not exceed 100 characters")
     private String appName;
 
     @NotNull(message = "startedAt must not be null")
