@@ -280,6 +280,7 @@ python -m worklens_desktop_client.run_sync_client --base-url http://localhost:80
 | `WORKLENS_REPORTS_DAILY_CRON` | `0 55 23 * * *` | 日报任务 Cron |
 | `WORKLENS_REPORTS_WEEKLY_CRON` | `0 30 0 * * MON` | 周报任务 Cron（周一凌晨执行，聚合截至周日） |
 | `WORKLENS_REPORTS_MONTHLY_CRON` | `0 0 1 * * *` | 月报任务 Cron（每天 01:00 候选，代码判断昨日是否为月末） |
+| `WORKLENS_REPORTS_RETRY_CRON` | `0 10 0 * * *` | 失败补跑任务 Cron（重试近 7 天日报、近 4 周周报、近 2 个月月报） |
 | `WORKLENS_REPORTS_ZONE` | `Asia/Hong_Kong` | 报告任务时区 |
 | `WORKLENS_DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek API 地址 |
 | `WORKLENS_DEEPSEEK_MODEL` | `deepseek-v4-flash` | 报告生成模型 |

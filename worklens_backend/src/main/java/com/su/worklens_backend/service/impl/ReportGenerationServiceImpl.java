@@ -100,25 +100,29 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         RuntimeException teamFailure = null;
         TeamDailyReportArchiveRequest teamReport = null;
         if (firstEmployeeFailure == null && !allSourceRecords.isEmpty()) {
-            List<ReportDetailItem> teamDetailItems = buildDetailItems(allSourceRecords);
-            String teamDetailJson = toJson(teamDetailItems);
-            try {
-                String teamSummary = llmProvider.generateText(
-                        buildTeamDailyPrompt(reportDate, teamDetailItems, employeeIds.size(), allSourceRecords)
-                );
-                teamReport = new TeamDailyReportArchiveRequest(
-                        reportDate,
-                        periodStartedAt,
-                        periodEndedAt,
-                        teamDetailJson,
-                        teamSummary,
-                        allSourceRecords.size(),
-                        allSourceRecords.stream().map(UsageRecordSnapshot::id).toList()
-                );
-            } catch (RuntimeException exception) {
-                teamFailure = exception;
-                LOGGER.warn("Failed to generate team daily report on {}. Successful employee reports will still be archived.",
-                        reportDate, exception);
+            if (teamDailyReportExists(reportDate)) {
+                LOGGER.info("Team daily report for {} already exists; skipping generation.", reportDate);
+            } else {
+                List<ReportDetailItem> teamDetailItems = buildDetailItems(allSourceRecords);
+                String teamDetailJson = toJson(teamDetailItems);
+                try {
+                    String teamSummary = llmProvider.generateText(
+                            buildTeamDailyPrompt(reportDate, teamDetailItems, employeeIds.size(), allSourceRecords)
+                    );
+                    teamReport = new TeamDailyReportArchiveRequest(
+                            reportDate,
+                            periodStartedAt,
+                            periodEndedAt,
+                            teamDetailJson,
+                            teamSummary,
+                            allSourceRecords.size(),
+                            allSourceRecords.stream().map(UsageRecordSnapshot::id).toList()
+                    );
+                } catch (RuntimeException exception) {
+                    teamFailure = exception;
+                    LOGGER.warn("Failed to generate team daily report on {}. Successful employee reports will still be archived.",
+                            reportDate, exception);
+                }
             }
         }
 
@@ -148,6 +152,61 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
                 employeeId,
                 reportDate,
                 reportDate
+        );
+        return count != null && count > 0;
+    }
+
+    private boolean teamDailyReportExists(LocalDate reportDate) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM llm_reports
+                        WHERE report_scope = 'TEAM'
+                          AND period_type = 'DAILY'
+                          AND period_start_date = ?
+                          AND period_end_date = ?
+                        """,
+                Integer.class,
+                reportDate,
+                reportDate
+        );
+        return count != null && count > 0;
+    }
+
+    private boolean employeePeriodReportExists(Long employeeId, String periodType, LocalDate periodStartDate, LocalDate periodEndDate) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM llm_reports
+                        WHERE report_scope = 'EMPLOYEE'
+                          AND period_type = ?
+                          AND target_employee_id = ?
+                          AND period_start_date = ?
+                          AND period_end_date = ?
+                        """,
+                Integer.class,
+                periodType,
+                employeeId,
+                periodStartDate,
+                periodEndDate
+        );
+        return count != null && count > 0;
+    }
+
+    private boolean teamPeriodReportExists(String periodType, LocalDate periodStartDate, LocalDate periodEndDate) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM llm_reports
+                        WHERE report_scope = 'TEAM'
+                          AND period_type = ?
+                          AND period_start_date = ?
+                          AND period_end_date = ?
+                        """,
+                Integer.class,
+                periodType,
+                periodStartDate,
+                periodEndDate
         );
         return count != null && count > 0;
     }
@@ -376,6 +435,11 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         );
         List<EmployeeWeeklyReportArchiveRequest> requests = new ArrayList<>();
         for (Long employeeId : employeeIds) {
+            if (employeePeriodReportExists(employeeId, "WEEKLY", weekStartDate, weekEndDate)) {
+                LOGGER.info("Weekly report for employee {} for {} to {} already exists; skipping.",
+                        employeeId, weekStartDate, weekEndDate);
+                continue;
+            }
             List<SourceReportSnapshot> sourceReports = findSourceReports("EMPLOYEE", "DAILY", employeeId, weekStartDate, weekEndDate);
             if (sourceReports.isEmpty()) {
                 continue;
@@ -404,6 +468,10 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
             LocalDateTime periodStartedAt,
             LocalDateTime periodEndedAt
     ) {
+        if (teamPeriodReportExists("WEEKLY", weekStartDate, weekEndDate)) {
+            LOGGER.info("Team weekly report for {} to {} already exists; skipping.", weekStartDate, weekEndDate);
+            return null;
+        }
         List<SourceReportSnapshot> sourceReports = findSourceReports("TEAM", "DAILY", null, weekStartDate, weekEndDate);
         if (sourceReports.isEmpty()) {
             return null;
@@ -446,6 +514,11 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
         );
         List<EmployeeMonthlyReportArchiveRequest> requests = new ArrayList<>();
         for (Long employeeId : employeeIds) {
+            if (employeePeriodReportExists(employeeId, "MONTHLY", monthStartDate, monthEndDate)) {
+                LOGGER.info("Monthly report for employee {} for {} to {} already exists; skipping.",
+                        employeeId, monthStartDate, monthEndDate);
+                continue;
+            }
             List<SourceReportSnapshot> sourceReports = findSourceReports("EMPLOYEE", "WEEKLY", employeeId, monthStartDate, monthEndDate);
             if (sourceReports.isEmpty()) {
                 continue;
@@ -474,6 +547,10 @@ public class ReportGenerationServiceImpl implements ReportGenerationService {
             LocalDateTime periodStartedAt,
             LocalDateTime periodEndedAt
     ) {
+        if (teamPeriodReportExists("MONTHLY", monthStartDate, monthEndDate)) {
+            LOGGER.info("Team monthly report for {} to {} already exists; skipping.", monthStartDate, monthEndDate);
+            return null;
+        }
         List<SourceReportSnapshot> sourceReports = findSourceReports("TEAM", "WEEKLY", null, monthStartDate, monthEndDate);
         if (sourceReports.isEmpty()) {
             return null;

@@ -21,7 +21,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class ReportGenerationServiceIntegrationTests extends PostgresIntegrationTestSupport {
@@ -206,6 +208,65 @@ class ReportGenerationServiceIntegrationTests extends PostgresIntegrationTestSup
         Integer remainingRawRecordCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
         assertThat(recoveredReportCount).isEqualTo(3);
         assertThat(remainingRawRecordCount).isZero();
+    }
+
+    @Test
+    void teamDailyFailureKeepsRawRecordsAndRetryConverges() {
+        long aliceEmployeeId = insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        long bobEmployeeId = insertUser("employee.bob", "EMPLOYEE", "E002", "Bob");
+        LocalDate reportDate = LocalDate.of(2026, 7, 8);
+        insertUsageRecord(aliceEmployeeId, "Chrome", "2026-07-08T09:00:00", "2026-07-08T10:00:00");
+        insertUsageRecord(bobEmployeeId, "Teams", "2026-07-08T10:00:00", "2026-07-08T10:30:00");
+
+        given(llmProvider.generateText(anyString()))
+                .willReturn("Alice daily summary", "Bob daily summary")
+                .willThrow(new IllegalStateException("Team LLM failed"));
+
+        assertThatThrownBy(() -> reportGenerationService.generateDailyReports(reportDate))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Team LLM failed");
+
+        Integer reportCountAfterFailure = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM llm_reports", Integer.class);
+        Integer rawCountAfterFailure = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
+        assertThat(reportCountAfterFailure).isEqualTo(2);
+        assertThat(rawCountAfterFailure).isEqualTo(2);
+
+        reset(llmProvider);
+        given(llmProvider.generateText(anyString()))
+                .willReturn("Team daily summary");
+
+        reportGenerationService.generateDailyReports(reportDate);
+
+        Integer recoveredReportCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM llm_reports", Integer.class);
+        Integer remainingRawRecordCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
+        assertThat(recoveredReportCount).isEqualTo(3);
+        assertThat(remainingRawRecordCount).isZero();
+    }
+
+    @Test
+    void lateRawRecordsArrivingAfterArchiveSurviveRerun() {
+        long aliceEmployeeId = insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        LocalDate reportDate = LocalDate.of(2026, 7, 8);
+        insertUsageRecord(aliceEmployeeId, "Chrome", "2026-07-08T09:00:00", "2026-07-08T10:00:00");
+
+        given(llmProvider.generateText(anyString()))
+                .willReturn("Alice daily summary", "Team daily summary");
+
+        reportGenerationService.generateDailyReports(reportDate);
+
+        Integer rawCountAfterArchive = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
+        assertThat(rawCountAfterArchive).isZero();
+
+        insertUsageRecord(aliceEmployeeId, "Slack", "2026-07-08T09:15:00", "2026-07-08T09:20:00");
+
+        reset(llmProvider);
+        reportGenerationService.generateDailyReports(reportDate);
+
+        Integer remainingRawRecordCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
+        Integer reportCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM llm_reports", Integer.class);
+        assertThat(remainingRawRecordCount).isEqualTo(1);
+        assertThat(reportCount).isEqualTo(2);
+        verify(llmProvider, never()).generateText(anyString());
     }
 
     private long insertUser(String username, String role, String employeeNo, String name) {

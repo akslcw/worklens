@@ -115,25 +115,29 @@
 
 **证据**：提交 `8f1a4c6`（见 git log）。
 
-## H2 · 归档删除不安全 + 失败无重试 [ ]
+## H2 · 归档删除不安全 + 失败无重试 [x] 已修复（与 M7 联动）
 
-**位置**：`worklens_backend/src/main/java/com/su/worklens_backend/service/impl/ReportArchiveServiceImpl.java:41-49,155-179,363-379`、`ReportGenerationServiceImpl.java:91-134`。
+**位置**：`ReportArchiveServiceImpl`、`ReportGenerationServiceImpl`、`ReportGenerationScheduler`、`schema.sql`。
 
 **问题**：
 - 日报团队插入 `ON CONFLICT DO NOTHING`，但无论是否命中冲突都无条件 `DELETE` 源记录——重跑可能删除从未进入归档的新记录；
 - 员工日报 LLM 失败时成功归档的员工报告不删源数据、团队报告被跳过；这些孤儿 raw 记录**永远不被任何后续任务清理**（调度只处理当天），永久污染 `GET /team-usage-summary`；
 - 周/月报告任一 LLM 调用失败 → 整批回滚且**无重试机制**，该周期报告永久缺失、源日报/周报永久残留。
 
-**修复方案**：
-1. 删除源记录改为条件化：仅当插入实际生效（INSERT 返回 affected=1）才把该报告的源记录 id 加入删除集合；`deleteSourceRecords` 增加 `started_at` 窗口过滤，防止误删同窗口外记录；
-2. 增加"失败重试"：调度器每天任务开始时先重试前 N 天失败/缺失的报告（`llm_reports` 缺失 + 源数据存在的日期，比如补最近 7 天），或引入独立的补跑任务（cron 每天 00:10）；
-3. 员工日报失败的路径同样保留其源记录但记录 `source_count` 与日期，供重试任务识别；
-4. 团队报告失败不再阻止员工报告归档，但重试任务要能识别"有员工报告但无团队报告"的日期并补生成团队报告（源数据若已被删，则从当日员工报告 detail_json 聚合）。
+**修复方案（已实施）**：
+1. `llm_reports` 新增 `source_record_ids BIGINT[]`，全部六类报告插入时记录其源 id 集合；
+2. 删除改为"ID 归属 + 窗口"的精确条件删除：raw 记录仅当其 id 同时属于团队日报与本人日报的源集合才删除；日报仅当其 id 属于消费它的周报源集合才删除（员工/团队各自对应）；周报同理。晚到的数据（从未进过任何报告）在任何重跑下都不被删除；
+3. 周/月报告插入全部加 `ON CONFLICT DO NOTHING`；生成前做存在性检查（团队日报/周报/月报 + 员工周报/月报），重跑不重复生成、不浪费 LLM 调用；
+4. 新增补跑任务 `retryMissingReports`（每天 00:10，`WORKLENS_REPORTS_RETRY_CRON`）：重试近 7 天日报、近 4 个已完整结束的周（截至严格早于今天的周日）、近 2 个已结束的月；所有入口幂等，收敛后为低成本空跑。
 
 **验收标准**：
-- 集成测试：LLM 失败后重跑，报告生成成功且无重复、无孤儿 raw 记录、团队聚合数据正确；
-- 模拟"归档插入冲突 + 新记录并存"场景：新记录不被删除；
-- 重试任务对 7 天内失败日期可恢复。
+- [x] 集成测试：团队日报 LLM 失败后重跑收敛（2→3 报告、raw 清零）；部分员工失败重跑收敛（既有测试保持通过）；
+- [x] 模拟"归档完成后晚到新记录"：重跑不删除晚到记录、不重复生成报告、不再调用 LLM；
+- [x] 周/月重跑幂等（不重复生成、不调 LLM）；
+- [x] 调度单测覆盖补跑任务的日期范围与"周日不补当前周"边界；
+- [x] 全量后端 113/113 通过。
+
+**证据**：提交见 git log（"Archive reports with precise source-id deletion and add retry pass"）。
 
 ## H3 · 时区三处不一致 [ ]
 
@@ -320,15 +324,17 @@
 
 **验收标准**：双开测试第二个实例退出；时钟回拨单测不丢记录；断网数周模拟下缓存受上限约束；各条均有对应单测。
 
-## M7 · 周/月报告幂等缺失 [ ]
+## M7 · 周/月报告幂等缺失 [x] 已修复（随 H2 一起实施）
 
-**位置**：`ReportGenerationServiceImpl`（周/月无存在性检查）、`ReportArchiveServiceImpl`（周/月 INSERT 无 ON CONFLICT）。
+**位置**：`ReportGenerationServiceImpl`、`ReportArchiveServiceImpl`。
 
 **问题**：重跑撞唯一索引 → 整批回滚 + 白花 LLM 调用；结合 H1 的顺序问题放大。
 
-**修复方案**：与日报告对齐——生成前检查目标周期报告是否存在；INSERT 加 `ON CONFLICT ... DO NOTHING` 并据 affected 决定是否纳入删除集合（与 H2 联动）。
+**修复方案（已实施）**：生成前检查目标周期报告是否存在（员工周报/月报 + 团队周报/月报）；周/月 INSERT 全部加 `ON CONFLICT ... DO NOTHING`；删除改为按源 id 归属的精确删除（见 H2）。
 
-**验收标准**：同周期重跑无异常、无重复报告、源数据只被删除一次。
+**验收标准**：
+- [x] 周/月重跑幂等：无重复报告、不再调用 LLM（新增集成测试）；
+- [x] 全量后端 113/113 通过。
 
 ## M8 · 前端日期切换请求竞态 [ ]
 

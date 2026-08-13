@@ -12,8 +12,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class ReportGenerationSchedulerTests {
@@ -105,5 +107,52 @@ class ReportGenerationSchedulerTests {
         scheduler.generateMonthlyReports();
 
         verify(reportGenerationService, never()).generateMonthlyReports(LocalDate.of(2026, 8, 1));
+    }
+
+    @Test
+    void retryTaskUsesConfiguredCronAndHongKongTimezone() throws Exception {
+        Method method = ReportGenerationScheduler.class.getDeclaredMethod("retryMissingReports");
+
+        Scheduled scheduled = method.getAnnotation(Scheduled.class);
+
+        assertThat(scheduled).isNotNull();
+        assertThat(scheduled.cron()).isEqualTo("${worklens.reports.retry-cron:0 10 0 * * *}");
+        assertThat(scheduled.zone()).isEqualTo("${worklens.reports.zone:Asia/Hong_Kong}");
+    }
+
+    @Test
+    void retryTaskCoversLastSevenDaysFourClosedWeeksAndTwoClosedMonths() {
+        ReportGenerationService reportGenerationService = mock(ReportGenerationService.class);
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-07-12T16:10:00Z"),
+                ZoneId.of("Asia/Hong_Kong")
+        );
+        ReportGenerationScheduler scheduler = new ReportGenerationScheduler(reportGenerationService, clock);
+
+        scheduler.retryMissingReports();
+
+        verify(reportGenerationService).generateDailyReports(LocalDate.of(2026, 7, 12));
+        verify(reportGenerationService).generateDailyReports(LocalDate.of(2026, 7, 6));
+        verify(reportGenerationService, times(7)).generateDailyReports(any(LocalDate.class));
+        verify(reportGenerationService).generateWeeklyReports(LocalDate.of(2026, 7, 12));
+        verify(reportGenerationService).generateWeeklyReports(LocalDate.of(2026, 6, 21));
+        verify(reportGenerationService, times(4)).generateWeeklyReports(any(LocalDate.class));
+        verify(reportGenerationService).generateMonthlyReports(LocalDate.of(2026, 6,30));
+        verify(reportGenerationService).generateMonthlyReports(LocalDate.of(2026, 5, 31));
+    }
+
+    @Test
+    void retryTaskOnSundayOnlyRetriesWeeksStrictlyBeforeToday() {
+        ReportGenerationService reportGenerationService = mock(ReportGenerationService.class);
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-07-11T16:10:00Z"),
+                ZoneId.of("Asia/Hong_Kong")
+        );
+        ReportGenerationScheduler scheduler = new ReportGenerationScheduler(reportGenerationService, clock);
+
+        scheduler.retryMissingReports();
+
+        verify(reportGenerationService).generateWeeklyReports(LocalDate.of(2026, 7, 5));
+        verify(reportGenerationService, never()).generateWeeklyReports(LocalDate.of(2026, 7, 12));
     }
 }

@@ -18,6 +18,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class WeeklyReportGenerationServiceIntegrationTests extends PostgresIntegrationTestSupport {
@@ -169,6 +172,48 @@ class WeeklyReportGenerationServiceIntegrationTests extends PostgresIntegrationT
                 .doesNotContain("employeeId")
                 .doesNotContain("startedAt")
                 .doesNotContain("endedAt");
+    }
+
+    @Test
+    void generateWeeklyReportsIsIdempotentOnRerun() throws Exception {
+        long aliceEmployeeId = insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        LocalDate weekEndDate = LocalDate.of(2026, 7, 12);
+        insertEmployeeDailyReport(aliceEmployeeId, "2026-07-06", """
+                [
+                  {"appName":"Chrome","durationSeconds":3600,"durationMinutes":60,"ratio":1.0000}
+                ]
+                """);
+        insertTeamDailyReport("2026-07-06", """
+                [
+                  {"appName":"Chrome","durationSeconds":3600,"durationMinutes":60,"ratio":1.0000}
+                ]
+                """);
+
+        given(llmProvider.generateText(anyString()))
+                .willReturn("Alice weekly summary", "Team weekly summary");
+
+        reportGenerationService.generateWeeklyReports(weekEndDate);
+
+        Integer weeklyReportCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'WEEKLY'",
+                Integer.class
+        );
+        Integer dailyReportCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'DAILY'",
+                Integer.class
+        );
+        assertThat(weeklyReportCount).isEqualTo(2);
+        assertThat(dailyReportCount).isZero();
+
+        reset(llmProvider);
+        reportGenerationService.generateWeeklyReports(weekEndDate);
+
+        Integer weeklyReportCountAfterRerun = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'WEEKLY'",
+                Integer.class
+        );
+        assertThat(weeklyReportCountAfterRerun).isEqualTo(2);
+        verify(llmProvider, never()).generateText(anyString());
     }
 
     private long insertUser(String username, String role, String employeeNo, String name) {

@@ -5,6 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 
 /**
@@ -47,5 +48,35 @@ public class ReportGenerationScheduler {
         if (reportDate.equals(reportDate.withDayOfMonth(reportDate.lengthOfMonth()))) {
             reportGenerationService.generateMonthlyReports(reportDate);
         }
+    }
+
+    /**
+     * Convergence pass for periods whose LLM generation failed earlier. All
+     * generation entry points are idempotent (existing reports are skipped),
+     * so retrying is cheap when everything already succeeded. Only fully
+     * closed periods are retried: past days, weeks ending on a Sunday strictly
+     * before today, and fully elapsed months.
+     */
+    @Scheduled(cron = "${worklens.reports.retry-cron:0 10 0 * * *}", zone = "${worklens.reports.zone:Asia/Hong_Kong}")
+    public void retryMissingReports() {
+        LocalDate today = LocalDate.now(clock);
+
+        for (int daysBack = 1; daysBack <= 7; daysBack++) {
+            reportGenerationService.generateDailyReports(today.minusDays(daysBack));
+        }
+
+        LocalDate latestClosedWeekEnd = today.minusDays(1);
+        while (latestClosedWeekEnd.getDayOfWeek() != DayOfWeek.SUNDAY) {
+            latestClosedWeekEnd = latestClosedWeekEnd.minusDays(1);
+        }
+        for (int weeksBack = 0; weeksBack < 4; weeksBack++) {
+            reportGenerationService.generateWeeklyReports(latestClosedWeekEnd.minusWeeks(weeksBack));
+        }
+
+        LocalDate previousMonth = today.minusMonths(1);
+        LocalDate previousMonthEnd = previousMonth.withDayOfMonth(previousMonth.lengthOfMonth());
+        reportGenerationService.generateMonthlyReports(previousMonthEnd);
+        LocalDate monthBefore = previousMonthEnd.minusMonths(1);
+        reportGenerationService.generateMonthlyReports(monthBefore.withDayOfMonth(monthBefore.lengthOfMonth()));
     }
 }

@@ -142,6 +142,9 @@ ALTER TABLE llm_reports
     ADD COLUMN IF NOT EXISTS generated_at TIMESTAMP;
 
 ALTER TABLE llm_reports
+    ADD COLUMN IF NOT EXISTS source_record_ids BIGINT[];
+
+ALTER TABLE llm_reports
     ALTER COLUMN requester_employee_id DROP NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_llm_reports_employee_period

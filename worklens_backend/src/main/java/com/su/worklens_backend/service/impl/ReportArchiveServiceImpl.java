@@ -14,10 +14,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
 
+/**
+ * Archives generated reports and removes only the source data that was
+ * actually consumed by an archived report pair (employee + team).
+ *
+ * Every inserted report stores the ids of its source records/reports in
+ * {@code source_record_ids BIGINT[]}. A source row is deleted only when it is
+ * a member of the consuming report's id array (and, for raw usage records,
+ * when the owning employee's report also covers it). Late-arriving rows that
+ * were never part of a report therefore survive re-runs untouched, and the
+ * whole pipeline is idempotent: retries converge without duplicating reports
+ * or destroying uncovered data.
+ */
 @Service
 public class ReportArchiveServiceImpl implements ReportArchiveService {
 
@@ -44,38 +54,45 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
         }
         if (teamReport != null) {
             insertTeamDailyReport(teamReport);
-            deleteSourceRecords(teamReport.sourceRecordIds());
+        }
+        if (!employeeReports.isEmpty() || teamReport != null) {
+            LocalDate reportDate = teamReport != null ? teamReport.reportDate() : employeeReports.get(0).reportDate();
+            deleteCoveredDailySourceRecords(reportDate);
         }
     }
 
     @Override
     @Transactional
     public void archiveWeeklyReports(List<EmployeeWeeklyReportArchiveRequest> employeeReports, TeamWeeklyReportArchiveRequest teamReport) {
-        List<Long> sourceReportIds = new ArrayList<>();
         for (EmployeeWeeklyReportArchiveRequest report : employeeReports) {
             insertEmployeeWeeklyReport(report);
-            sourceReportIds.addAll(report.sourceReportIds());
         }
         if (teamReport != null) {
             insertTeamWeeklyReport(teamReport);
-            sourceReportIds.addAll(teamReport.sourceReportIds());
         }
-        deleteSourceReports(sourceReportIds, DAILY_PERIOD);
+        if (!employeeReports.isEmpty() || teamReport != null) {
+            deleteCoveredWeeklySourceReports(
+                    employeeReports.isEmpty() ? teamReport.periodStartDate() : employeeReports.get(0).periodStartDate(),
+                    employeeReports.isEmpty() ? teamReport.periodEndDate() : employeeReports.get(0).periodEndDate()
+            );
+        }
     }
 
     @Override
     @Transactional
     public void archiveMonthlyReports(List<EmployeeMonthlyReportArchiveRequest> employeeReports, TeamMonthlyReportArchiveRequest teamReport) {
-        List<Long> sourceReportIds = new ArrayList<>();
         for (EmployeeMonthlyReportArchiveRequest report : employeeReports) {
             insertEmployeeMonthlyReport(report);
-            sourceReportIds.addAll(report.sourceReportIds());
         }
         if (teamReport != null) {
             insertTeamMonthlyReport(teamReport);
-            sourceReportIds.addAll(teamReport.sourceReportIds());
         }
-        deleteSourceReports(sourceReportIds, WEEKLY_PERIOD);
+        if (!employeeReports.isEmpty() || teamReport != null) {
+            deleteCoveredMonthlySourceReports(
+                    employeeReports.isEmpty() ? teamReport.periodStartDate() : employeeReports.get(0).periodStartDate(),
+                    employeeReports.isEmpty() ? teamReport.periodEndDate() : employeeReports.get(0).periodEndDate()
+            );
+        }
     }
 
     @Override
@@ -127,9 +144,10 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
                         ON CONFLICT (report_scope, period_type, target_employee_id, period_start_date, period_end_date)
                         WHERE report_scope = 'EMPLOYEE'
                         DO NOTHING
@@ -148,7 +166,8 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 RAW_USAGE_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceRecordIds())
         );
     }
 
@@ -171,9 +190,10 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
                         ON CONFLICT (report_scope, period_type, period_start_date, period_end_date)
                         WHERE report_scope = 'TEAM'
                         DO NOTHING
@@ -192,7 +212,8 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 RAW_USAGE_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceRecordIds())
         );
     }
 
@@ -215,9 +236,13 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
+                        ON CONFLICT (report_scope, period_type, target_employee_id, period_start_date, period_end_date)
+                        WHERE report_scope = 'EMPLOYEE'
+                        DO NOTHING
                         """,
                 "EMPLOYEE_WEEKLY",
                 report.employeeId(),
@@ -233,7 +258,8 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 DAILY_REPORTS_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceReportIds())
         );
     }
 
@@ -256,9 +282,13 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
+                        ON CONFLICT (report_scope, period_type, period_start_date, period_end_date)
+                        WHERE report_scope = 'TEAM'
+                        DO NOTHING
                         """,
                 "TEAM_WEEKLY",
                 null,
@@ -274,7 +304,8 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 DAILY_REPORTS_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceReportIds())
         );
     }
 
@@ -297,9 +328,13 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
+                        ON CONFLICT (report_scope, period_type, target_employee_id, period_start_date, period_end_date)
+                        WHERE report_scope = 'EMPLOYEE'
+                        DO NOTHING
                         """,
                 "EMPLOYEE_MONTHLY",
                 report.employeeId(),
@@ -315,7 +350,8 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 WEEKLY_REPORTS_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceReportIds())
         );
     }
 
@@ -338,9 +374,13 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                             detail_json,
                             source_layer,
                             source_count,
-                            generated_at
+                            generated_at,
+                            source_record_ids
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::bigint[])
+                        ON CONFLICT (report_scope, period_type, period_start_date, period_end_date)
+                        WHERE report_scope = 'TEAM'
+                        DO NOTHING
                         """,
                 "TEAM_MONTHLY",
                 null,
@@ -356,50 +396,158 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
                 report.detailJson(),
                 WEEKLY_REPORTS_SOURCE,
                 report.sourceCount(),
-                Timestamp.valueOf(now)
+                Timestamp.valueOf(now),
+                toPgLongArray(report.sourceReportIds())
         );
     }
 
-    private void deleteSourceRecords(List<Long> sourceRecordIds) {
-        if (sourceRecordIds.isEmpty()) {
-            return;
-        }
-
-        StringJoiner placeholders = new StringJoiner(", ");
-        List<Object> parameters = new ArrayList<>();
-        for (Long sourceRecordId : sourceRecordIds) {
-            placeholders.add("?");
-            parameters.add(sourceRecordId);
-        }
-
+    /**
+     * Deletes raw usage records of the given day only when the record id is
+     * covered by BOTH the team daily report and its employee's daily report.
+     * Late-arriving records that were never part of a report survive.
+     */
+    private void deleteCoveredDailySourceRecords(LocalDate reportDate) {
         jdbcTemplate.update(
-                "DELETE FROM usage_records WHERE id IN (" + placeholders + ")",
-                parameters.toArray()
+                """
+                        DELETE FROM usage_records r
+                        WHERE r.started_at >= ?::timestamp
+                          AND r.started_at < (?::date + 1)::timestamp
+                          AND r.id IN (
+                              SELECT unnest(source_record_ids)
+                              FROM llm_reports tr
+                              WHERE tr.report_scope = 'TEAM'
+                                AND tr.period_type = 'DAILY'
+                                AND tr.period_start_date = ?
+                                AND tr.period_end_date = ?
+                          )
+                          AND r.id IN (
+                              SELECT unnest(source_record_ids)
+                              FROM llm_reports er
+                              WHERE er.report_scope = 'EMPLOYEE'
+                                AND er.period_type = 'DAILY'
+                                AND er.target_employee_id = r.employee_id
+                                AND er.period_start_date = ?
+                                AND er.period_end_date = ?
+                          )
+                        """,
+                reportDate,
+                reportDate,
+                reportDate,
+                reportDate,
+                reportDate,
+                reportDate
         );
     }
 
-    private void deleteSourceReports(List<Long> sourceReportIds, String periodType) {
-        if (sourceReportIds.isEmpty()) {
-            return;
-        }
-
-        StringJoiner placeholders = new StringJoiner(", ");
-        List<Object> parameters = new ArrayList<>();
-        for (Long sourceReportId : sourceReportIds) {
-            placeholders.add("?");
-            parameters.add(sourceReportId);
-        }
-
+    /**
+     * Deletes daily reports of the given week only when they are members of
+     * the consuming weekly report's source ids: team dailies via the team
+     * weekly, employee dailies via their employee's weekly. Late-generated
+     * dailies that were never part of a weekly report survive.
+     */
+    private void deleteCoveredWeeklySourceReports(LocalDate periodStartDate, LocalDate periodEndDate) {
         jdbcTemplate.update(
-                "DELETE FROM llm_reports WHERE period_type = ? AND id IN (" + placeholders + ")",
-                prepend(periodType, parameters).toArray()
+                """
+                        DELETE FROM llm_reports d
+                        WHERE d.period_type = 'DAILY'
+                          AND d.period_start_date >= ?
+                          AND d.period_end_date <= ?
+                          AND (
+                              (
+                                  d.report_scope = 'TEAM'
+                                  AND d.id IN (
+                                      SELECT unnest(source_record_ids)
+                                      FROM llm_reports tw
+                                      WHERE tw.report_scope = 'TEAM'
+                                        AND tw.period_type = 'WEEKLY'
+                                        AND tw.period_start_date = ?
+                                        AND tw.period_end_date = ?
+                                  )
+                              )
+                              OR
+                              (
+                                  d.report_scope = 'EMPLOYEE'
+                                  AND d.id IN (
+                                      SELECT unnest(source_record_ids)
+                                      FROM llm_reports ew
+                                      WHERE ew.report_scope = 'EMPLOYEE'
+                                        AND ew.period_type = 'WEEKLY'
+                                        AND ew.target_employee_id = d.target_employee_id
+                                        AND ew.period_start_date = ?
+                                        AND ew.period_end_date = ?
+                                  )
+                              )
+                          )
+                        """,
+                periodStartDate,
+                periodEndDate,
+                periodStartDate,
+                periodEndDate,
+                periodStartDate,
+                periodEndDate
         );
     }
 
-    private List<Object> prepend(Object value, List<Object> parameters) {
-        List<Object> allParameters = new ArrayList<>();
-        allParameters.add(value);
-        allParameters.addAll(parameters);
-        return allParameters;
+    /**
+     * Deletes weekly reports of the given month only when they are members of
+     * the consuming monthly report's source ids: team weeklies via the team
+     * monthly, employee weeklies via their employee's monthly. Late-generated
+     * weeklies that were never part of a monthly report survive.
+     */
+    private void deleteCoveredMonthlySourceReports(LocalDate periodStartDate, LocalDate periodEndDate) {
+        jdbcTemplate.update(
+                """
+                        DELETE FROM llm_reports w
+                        WHERE w.period_type = 'WEEKLY'
+                          AND w.period_start_date >= ?
+                          AND w.period_end_date <= ?
+                          AND (
+                              (
+                                  w.report_scope = 'TEAM'
+                                  AND w.id IN (
+                                      SELECT unnest(source_record_ids)
+                                      FROM llm_reports tm
+                                      WHERE tm.report_scope = 'TEAM'
+                                        AND tm.period_type = 'MONTHLY'
+                                        AND tm.period_start_date = ?
+                                        AND tm.period_end_date = ?
+                                  )
+                              )
+                              OR
+                              (
+                                  w.report_scope = 'EMPLOYEE'
+                                  AND w.id IN (
+                                      SELECT unnest(source_record_ids)
+                                      FROM llm_reports em
+                                      WHERE em.report_scope = 'EMPLOYEE'
+                                        AND em.period_type = 'MONTHLY'
+                                        AND em.target_employee_id = w.target_employee_id
+                                        AND em.period_start_date = ?
+                                        AND em.period_end_date = ?
+                                  )
+                              )
+                          )
+                        """,
+                periodStartDate,
+                periodEndDate,
+                periodStartDate,
+                periodEndDate,
+                periodStartDate,
+                periodEndDate
+        );
+    }
+
+    private String toPgLongArray(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder("{");
+        for (int index = 0; index < ids.size(); index++) {
+            if (index > 0) {
+                builder.append(',');
+            }
+            builder.append(ids.get(index));
+        }
+        return builder.append('}').toString();
     }
 }

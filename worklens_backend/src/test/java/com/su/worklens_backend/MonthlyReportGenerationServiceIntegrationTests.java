@@ -18,6 +18,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class MonthlyReportGenerationServiceIntegrationTests extends PostgresIntegrationTestSupport {
@@ -171,6 +174,48 @@ class MonthlyReportGenerationServiceIntegrationTests extends PostgresIntegration
                 .doesNotContain("employeeId")
                 .doesNotContain("startedAt")
                 .doesNotContain("endedAt");
+    }
+
+    @Test
+    void generateMonthlyReportsIsIdempotentOnRerun() throws Exception {
+        long aliceEmployeeId = insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        LocalDate monthEndDate = LocalDate.of(2026, 7, 31);
+        insertEmployeeWeeklyReport(aliceEmployeeId, "2026-07-06", "2026-07-12", """
+                [
+                  {"appName":"Chrome","durationSeconds":5400,"durationMinutes":90,"ratio":1.0000}
+                ]
+                """);
+        insertTeamWeeklyReport("2026-07-06", "2026-07-12", """
+                [
+                  {"appName":"Chrome","durationSeconds":5400,"durationMinutes":90,"ratio":1.0000}
+                ]
+                """);
+
+        given(llmProvider.generateText(anyString()))
+                .willReturn("Alice monthly summary", "Team monthly summary");
+
+        reportGenerationService.generateMonthlyReports(monthEndDate);
+
+        Integer monthlyReportCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'MONTHLY'",
+                Integer.class
+        );
+        Integer weeklyReportCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'WEEKLY'",
+                Integer.class
+        );
+        assertThat(monthlyReportCount).isEqualTo(2);
+        assertThat(weeklyReportCount).isZero();
+
+        reset(llmProvider);
+        reportGenerationService.generateMonthlyReports(monthEndDate);
+
+        Integer monthlyReportCountAfterRerun = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM llm_reports WHERE period_type = 'MONTHLY'",
+                Integer.class
+        );
+        assertThat(monthlyReportCountAfterRerun).isEqualTo(2);
+        verify(llmProvider, never()).generateText(anyString());
     }
 
     private long insertUser(String username, String role, String employeeNo, String name) {
