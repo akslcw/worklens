@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @TableName("llm_reports")
@@ -33,6 +34,18 @@ public class LlmReport {
 
     @TableField("created_at")
     private LocalDateTime createdAt;
+
+    @TableField("report_scope")
+    private String reportScope;
+
+    @TableField("period_type")
+    private String periodType;
+
+    @TableField("period_start_date")
+    private LocalDate periodStartDate;
+
+    @TableField("period_end_date")
+    private LocalDate periodEndDate;
 
     public Long getId() {
         return id;
@@ -96,5 +109,37 @@ public class LlmReport {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getReportScope() {
+        return reportScope;
+    }
+
+    public void setReportScope(String reportScope) {
+        this.reportScope = reportScope;
+    }
+
+    public String getPeriodType() {
+        return periodType;
+    }
+
+    public void setPeriodType(String periodType) {
+        this.periodType = periodType;
+    }
+
+    public LocalDate getPeriodStartDate() {
+        return periodStartDate;
+    }
+
+    public void setPeriodStartDate(LocalDate periodStartDate) {
+        this.periodStartDate = periodStartDate;
+    }
+
+    public LocalDate getPeriodEndDate() {
+        return periodEndDate;
+    }
+
+    public void setPeriodEndDate(LocalDate periodEndDate) {
+        this.periodEndDate = periodEndDate;
     }
 }

@@ -130,11 +130,31 @@ function formatPercent(ratio: number) {
 }
 
 function reportPeriodLabel(report: ReportHistoryItem) {
+  if (report.periodStartDate && report.periodEndDate) {
+    const typeLabel = periodTypeLabel(report.periodType)
+    if (report.periodType === 'DAILY') {
+      return `${formatDateOnly(report.periodStartDate)} · ${typeLabel}`
+    }
+    return `${formatDateOnly(report.periodStartDate)} - ${formatDateOnly(report.periodEndDate)} · ${typeLabel}`
+  }
   if (!report.periodStartedAt || !report.periodEndedAt) {
     return '最近一周'
   }
 
   return `${formatDateTime(report.periodStartedAt)} - ${formatDateTime(report.periodEndedAt)}`
+}
+
+function periodTypeLabel(periodType: string | null) {
+  if (periodType === 'DAILY') {
+    return '日报'
+  }
+  if (periodType === 'WEEKLY') {
+    return '周报'
+  }
+  if (periodType === 'MONTHLY') {
+    return '月报'
+  }
+  return '报告'
 }
 
 function usageReportPeriodLabel() {

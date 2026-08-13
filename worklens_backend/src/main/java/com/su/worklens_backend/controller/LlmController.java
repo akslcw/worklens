@@ -61,6 +61,6 @@ public class LlmController {
     public List<ReportHistoryResponse> getTeamReportHistory(HttpServletRequest httpServletRequest) {
         AuthenticatedUser authenticatedUser = authService.getAuthenticatedUser(httpServletRequest);
         authService.requireRole(authenticatedUser, MANAGER_ROLE);
-        return reportHistoryService.listTeamReportHistory(authenticatedUser.getEmployeeId());
+        return reportHistoryService.listTeamReportHistory();
     }
 }

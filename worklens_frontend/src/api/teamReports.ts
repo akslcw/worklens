@@ -2,9 +2,12 @@ import { request } from './http'
 
 export type ReportHistoryItem = {
   reportType: string
+  periodType: string | null
   summary: string
   periodStartedAt: string | null
   periodEndedAt: string | null
+  periodStartDate: string | null
+  periodEndDate: string | null
   createdAt: string
 }
 

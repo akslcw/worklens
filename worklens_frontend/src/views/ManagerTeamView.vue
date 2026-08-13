@@ -65,12 +65,37 @@ function formatDateTime(value: string | null) {
   return hongKongDateTimeString(value)
 }
 
+function formatDateOnly(value: string) {
+  const [year, month, day] = value.split('-')
+  return `${year}/${month}/${day}`
+}
+
 function reportPeriodLabel(report: ReportHistoryItem) {
+  if (report.periodStartDate && report.periodEndDate) {
+    const typeLabel = periodTypeLabel(report.periodType)
+    if (report.periodType === 'DAILY') {
+      return `${formatDateOnly(report.periodStartDate)} · ${typeLabel}`
+    }
+    return `${formatDateOnly(report.periodStartDate)} - ${formatDateOnly(report.periodEndDate)} · ${typeLabel}`
+  }
   if (!report.periodStartedAt || !report.periodEndedAt) {
     return '时间范围由后端历史记录提供'
   }
 
   return `${formatDateTime(report.periodStartedAt)} - ${formatDateTime(report.periodEndedAt)}`
+}
+
+function periodTypeLabel(periodType: string | null) {
+  if (periodType === 'DAILY') {
+    return '日报'
+  }
+  if (periodType === 'WEEKLY') {
+    return '周报'
+  }
+  if (periodType === 'MONTHLY') {
+    return '月报'
+  }
+  return '报告'
 }
 
 function toErrorMessage(error: unknown, fallback: string) {

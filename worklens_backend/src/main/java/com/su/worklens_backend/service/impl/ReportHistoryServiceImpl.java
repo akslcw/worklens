@@ -7,14 +7,18 @@ import com.su.worklens_backend.mapper.LlmReportMapper;
 import com.su.worklens_backend.service.ReportHistoryService;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * History queries follow the archive pipeline's schema (report_scope +
+ * period_type + period dates). Team reports are shared across managers, so
+ * the team history no longer filters by the legacy requester column.
+ */
 @Service
 public class ReportHistoryServiceImpl implements ReportHistoryService {
 
-    public static final String EMPLOYEE_WEEKLY = "EMPLOYEE_WEEKLY";
-    public static final String TEAM_SUMMARY = "TEAM_SUMMARY";
+    private static final String EMPLOYEE_SCOPE = "EMPLOYEE";
+    private static final String TEAM_SCOPE = "TEAM";
 
     private final LlmReportMapper llmReportMapper;
 
@@ -23,50 +27,23 @@ public class ReportHistoryServiceImpl implements ReportHistoryService {
     }
 
     @Override
-    public void saveEmployeeWeeklyReport(Long employeeId, LocalDateTime periodStartedAt, LocalDateTime periodEndedAt, String summary) {
-        LlmReport report = new LlmReport();
-        report.setReportType(EMPLOYEE_WEEKLY);
-        report.setRequesterEmployeeId(employeeId);
-        report.setTargetEmployeeId(employeeId);
-        report.setSummary(summary);
-        report.setPeriodStartedAt(periodStartedAt);
-        report.setPeriodEndedAt(periodEndedAt);
-        report.setCreatedAt(LocalDateTime.now());
-        llmReportMapper.insert(report);
-    }
-
-    @Override
-    public void saveTeamSummaryReport(Long requesterEmployeeId, String summary) {
-        LlmReport report = new LlmReport();
-        report.setReportType(TEAM_SUMMARY);
-        report.setRequesterEmployeeId(requesterEmployeeId);
-        report.setTargetEmployeeId(null);
-        report.setSummary(summary);
-        report.setPeriodStartedAt(null);
-        report.setPeriodEndedAt(null);
-        report.setCreatedAt(LocalDateTime.now());
-        llmReportMapper.insert(report);
-    }
-
-    @Override
     public List<ReportHistoryResponse> listEmployeeReportHistory(Long employeeId) {
         return llmReportMapper.selectList(
                         new LambdaQueryWrapper<LlmReport>()
-                                .eq(LlmReport::getReportType, EMPLOYEE_WEEKLY)
+                                .eq(LlmReport::getReportScope, EMPLOYEE_SCOPE)
                                 .eq(LlmReport::getTargetEmployeeId, employeeId)
-                                .orderByDesc(LlmReport::getCreatedAt, LlmReport::getId)
+                                .orderByDesc(LlmReport::getPeriodStartDate, LlmReport::getId)
                 ).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Override
-    public List<ReportHistoryResponse> listTeamReportHistory(Long requesterEmployeeId) {
+    public List<ReportHistoryResponse> listTeamReportHistory() {
         return llmReportMapper.selectList(
                         new LambdaQueryWrapper<LlmReport>()
-                                .eq(LlmReport::getReportType, TEAM_SUMMARY)
-                                .eq(LlmReport::getRequesterEmployeeId, requesterEmployeeId)
-                                .orderByDesc(LlmReport::getCreatedAt, LlmReport::getId)
+                                .eq(LlmReport::getReportScope, TEAM_SCOPE)
+                                .orderByDesc(LlmReport::getPeriodStartDate, LlmReport::getId)
                 ).stream()
                 .map(this::toResponse)
                 .toList();
@@ -75,9 +52,12 @@ public class ReportHistoryServiceImpl implements ReportHistoryService {
     private ReportHistoryResponse toResponse(LlmReport report) {
         return new ReportHistoryResponse(
                 report.getReportType(),
+                report.getPeriodType(),
                 report.getSummary(),
                 report.getPeriodStartedAt(),
                 report.getPeriodEndedAt(),
+                report.getPeriodStartDate(),
+                report.getPeriodEndDate(),
                 report.getCreatedAt()
         );
     }

@@ -158,20 +158,23 @@
 
 **证据**：提交见 git log（"Unify time handling on the Hong Kong clock (H3)"）。
 
-## H4 · 报告历史与归档体系断链 [ ]
+## H4 · 报告历史与归档体系断链 [x] 已修复
 
-**位置**：`worklens_backend/src/main/java/com/su/worklens_backend/service/impl/ReportHistoryServiceImpl.java:52-73`、`LlmController`、前端 `ManagerTeamView.vue` / `EmployeeHomeView.vue`（历史面板）。
+**位置**：`ReportHistoryServiceImpl`、`LlmReport`（实体补字段）、`ReportHistoryResponse`、`LlmController`、前端 `teamReports.ts` / `EmployeeHomeView` / `ManagerTeamView`。
 
 **问题**：新归档写 `report_scope`/`period_type`（DAILY/WEEKLY/MONTHLY），历史接口仍按旧 `report_type` 过滤：`listTeamReportHistory` 过滤 `TEAM_SUMMARY` 且 `requester_employee_id=管理者`，而新团队报告 requester 为 NULL → **管理者报告历史永远为空**；员工历史只见 WEEKLY。
 
-**修复方案**：
-1. `ReportHistoryServiceImpl` 改用新字段查询：员工历史 `report_scope='EMPLOYEE' AND target_employee_id=?`；团队历史 `report_scope='TEAM'`；按 `period_start_date DESC, id DESC` 排序；
-2. `ReportHistoryResponse` 补 `periodStartDate/periodEndDate/periodType` 字段，前端历史标签按日期区间渲染；
-3. 删除死代码 `saveEmployeeWeeklyReport`/`saveTeamSummaryReport`（无调用方）。
+**修复方案（已实施）**：
+1. `ReportHistoryServiceImpl` 改用新字段查询：员工历史 `report_scope='EMPLOYEE' AND target_employee_id=?`（DAILY/WEEKLY/MONTHLY 全部返回）；团队历史 `report_scope='TEAM'`（团队报告全体管理者共享，不再按 requester 过滤）；按 `period_start_date DESC, id DESC` 排序；
+2. `LlmReport` 实体补齐 `report_scope/period_type/period_start_date/period_end_date` 字段；`ReportHistoryResponse` 增加 `periodType/periodStartDate/periodEndDate`；
+3. 删除死代码 `saveEmployeeWeeklyReport`/`saveTeamSummaryReport`（无调用方）；
+4. 前端历史标签按周期类型显示"日报/周报/月报 + 日期区间"。
 
 **验收标准**：
-- 集成测试：归档生成日报/周报/月报后，员工历史返回全部三类、团队历史返回团队报告（不再为空）；
-- 前端 `ManagerTeamView` 历史面板展示新归档报告。
+- [x] 集成测试：员工历史返回 DAILY/WEEKLY/MONTHLY 三类且按周期倒序；团队历史返回新归档报告（不再为空）；401/403 边界保持；
+- [x] 全量后端 115/115、前端 35/35、生产构建通过。
+
+**证据**：提交见 git log（"Fix report history to query the archive schema (H4)"）。
 
 ## H5 · 员工档案一致性缺陷 [ ]
 
