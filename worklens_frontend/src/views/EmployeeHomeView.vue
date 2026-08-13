@@ -20,6 +20,7 @@ const errorMessage = ref('')
 const usageDate = ref(todayDateString())
 const usagePage = ref(1)
 const usagePageSize = 10
+let usageViewRequestSequence = 0
 
 const usageCards = computed(() => usageView.value?.items ?? [])
 const usageReport = computed(() => usageView.value?.report ?? null)
@@ -57,20 +58,35 @@ async function loadEmployeeHome() {
   }
 }
 
-async function loadUsageView() {
+async function loadUsageView(dateOverride?: string) {
   if (!session?.token) {
     return
   }
 
+  const requestSequence = ++usageViewRequestSequence
   usageLoading.value = true
   errorMessage.value = ''
 
   try {
-    usageView.value = await getUsageView(session.token, usageDate.value, usagePage.value, usagePageSize)
+    const view = await getUsageView(
+      session.token,
+      dateOverride ?? usageDate.value,
+      usagePage.value,
+      usagePageSize,
+    )
+    if (requestSequence !== usageViewRequestSequence) {
+      return
+    }
+    usageView.value = view
   } catch (error) {
+    if (requestSequence !== usageViewRequestSequence) {
+      return
+    }
     errorMessage.value = toErrorMessage(error, '使用明细加载失败。')
   } finally {
-    usageLoading.value = false
+    if (requestSequence === usageViewRequestSequence) {
+      usageLoading.value = false
+    }
   }
 }
 
@@ -179,6 +195,8 @@ function toErrorMessage(error: unknown, fallback: string) {
   }
   return fallback
 }
+
+defineExpose({ loadUsageView })
 </script>
 
 <template>
@@ -214,7 +232,7 @@ function toErrorMessage(error: unknown, fallback: string) {
             </div>
             <label class="date-control">
               <span>日期</span>
-              <input v-model="usageDate" type="date" @change="handleUsageDateChange" />
+              <input v-model="usageDate" type="date" :disabled="usageLoading" @change="handleUsageDateChange" />
             </label>
           </div>
 

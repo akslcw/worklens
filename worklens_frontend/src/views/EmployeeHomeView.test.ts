@@ -188,6 +188,66 @@ describe('EmployeeHomeView', () => {
     expect(wrapper.find('[data-test="usage-app-card"]').exists()).toBe(false)
   })
 
+  it('ignores stale responses when the date changes quickly', async () => {
+    const pendingResolvers: Array<(response: Response) => void> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+
+        if (url.endsWith('/api/usage-records/view?date=2026-07-08&page=1&pageSize=10')) {
+          return jsonResponse({
+            mode: 'LIVE_USAGE',
+            date: '2026-07-08',
+            page: 1,
+            pageSize: 10,
+            totalApps: 1,
+            items: [{ appName: 'Old App', durationSeconds: 60, segments: [] }],
+          })
+        }
+
+        if (url.endsWith('/api/usage-records/view?date=2026-07-09&page=1&pageSize=10')) {
+          return new Promise<Response>((resolve) => {
+            pendingResolvers.push(resolve)
+          })
+        }
+
+        if (url.endsWith('/api/llm/employee-report-history')) {
+          return jsonResponse([])
+        }
+
+        return new Response(null, { status: 404 })
+      }),
+    )
+
+    const wrapper = await mountEmployeeHome()
+    await flushPromises()
+
+    const dateInput = wrapper.get('input[type="date"]')
+    const loadUsageView = (wrapper.vm as { loadUsageView: (date?: string) => Promise<void> }).loadUsageView
+
+    void loadUsageView('2026-07-09')
+    await flushPromises()
+    expect((dateInput.element as HTMLInputElement).disabled).toBe(true)
+
+    await loadUsageView('2026-07-08')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Old App')
+
+    pendingResolvers.forEach((resolve) => resolve(jsonResponse({
+      mode: 'LIVE_USAGE',
+      date: '2026-07-09',
+      page: 1,
+      pageSize: 10,
+      totalApps: 1,
+      items: [{ appName: 'Stale App', durationSeconds: 60, segments: [] }],
+    })))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Old App')
+    expect(wrapper.text()).not.toContain('Stale App')
+  })
+
   it('does not expose manual employee report generation', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
