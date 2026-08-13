@@ -17,16 +17,26 @@ class UploadBatchReport:
 
 
 class SyncService:
+    # Upper bound on HTTP uploads per flush so a large backlog cannot stall
+    # one flush for minutes; the remainder stays in the local cache.
+    MAX_UPLOAD_BATCH_SIZE = 200
+
     def __init__(self, api_client, local_store: LocalRecordStore) -> None:
         self._api_client = api_client
         self._local_store = local_store
 
-    def upload_batch(self, token: str, new_records: list[ActivityRecord]) -> UploadBatchReport:
+    def upload_batch(
+        self,
+        token: str,
+        new_records: list[ActivityRecord],
+        max_batch_size: int = MAX_UPLOAD_BATCH_SIZE,
+    ) -> UploadBatchReport:
         uploaded_count = 0
         pending_records = self._local_store.list_pending_records()
+        pending_batch = pending_records[:max_batch_size]
         completed_pending_ids: list[int] = []
 
-        for pending_record in pending_records:
+        for pending_record in pending_batch:
             try:
                 self._api_client.create_usage_record(
                     token=token,
@@ -50,7 +60,12 @@ class SyncService:
 
         self._local_store.delete_records(completed_pending_ids)
 
-        for index, record in enumerate(new_records):
+        remaining_capacity = max_batch_size - len(pending_batch)
+        new_batch = new_records[:remaining_capacity]
+        if len(new_records) > remaining_capacity:
+            self._local_store.add_records(new_records[remaining_capacity:])
+
+        for index, record in enumerate(new_batch):
             try:
                 self._api_client.create_usage_record(
                     token=token,
@@ -60,7 +75,7 @@ class SyncService:
                     client_record_id=record.client_record_id,
                 )
             except requests.RequestException as error:
-                self._local_store.add_records(new_records[index:])
+                self._local_store.add_records(new_batch[index:])
                 failure = self._classify_failure(error)
                 return UploadBatchReport(
                     uploaded_count=uploaded_count,

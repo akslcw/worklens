@@ -38,6 +38,25 @@ class BackgroundRunnerTests(unittest.TestCase):
         self.assertIsInstance(runner.last_error, RuntimeError)
         self.assertEqual("boom", str(runner.last_error))
 
+    def test_runner_notifies_on_error_callback_when_worker_fails(self) -> None:
+        statuses: list[str] = []
+        errors: list[Exception] = []
+
+        def worker(stop_event: threading.Event) -> None:
+            raise RuntimeError("boom")
+
+        runner = BackgroundRunner(
+            worker=worker,
+            on_status_change=statuses.append,
+            on_error=errors.append,
+        )
+
+        runner.start()
+        runner.join(timeout=1)
+
+        self.assertEqual(1, len(errors))
+        self.assertEqual("boom", str(errors[0]))
+
 
 if __name__ == "__main__":
     unittest.main()

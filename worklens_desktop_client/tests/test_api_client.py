@@ -161,7 +161,7 @@ class WorkLensApiClientTests(unittest.TestCase):
                 "startedAt": "2026-07-04T12:00:00",
                 "endedAt": "2026-07-04T12:05:00",
             },
-            timeout=10,
+            timeout=5,
         )
         response.raise_for_status.assert_called_once()
 
@@ -199,7 +199,7 @@ class WorkLensApiClientTests(unittest.TestCase):
                 "endedAt": "2026-07-04T12:05:00",
                 "clientRecordId": "client-record-0001",
             },
-            timeout=10,
+            timeout=5,
         )
 
     @staticmethod

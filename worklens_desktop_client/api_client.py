@@ -96,7 +96,7 @@ class WorkLensApiClient:
                 "Authorization": f"Bearer {token}",
             },
             json=payload,
-            timeout=10,
+            timeout=5,
         )
         response.raise_for_status()
         return response.json()

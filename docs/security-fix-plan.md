@@ -234,20 +234,23 @@
 
 **证据**：提交见 git log（"Harden desktop client credential surface (H7)"）。
 
-## H8 · 采样与上传同线程阻塞 + 异常静默 [ ]
+## H8 · 采样与上传同线程阻塞 + 异常静默 [x] 已修复
 
-**位置**：`sync_runtime.py:73-89`、`background_runner.py:35-43`、`tray_app.py:155-167`。
+**位置**：`sync_runtime.py`、`sync_service.py`、`api_client.py`、`background_runner.py`、`tray_app.py`。
 
 **问题**：采样与同步上传串行执行，慢网络/大积压时采样停摆数分钟、节拍漂移（网络越差数据越残缺）；采集线程异常被吞，用户只看到红图标、无原因说明。
 
-**修复方案**：
-1. 采样与上传分离为两个线程（生产者-消费者队列，队列有界防内存膨胀）；
-2. `next_upload_at += interval` 固定节拍推进；单条请求超时降到 3–5s，单轮上传条数设上限（如 200 条）；
-3. `BackgroundRunner` 增加 `on_error` 回调，托盘弹窗显示 `last_error` 摘要；持续失败时托盘状态明确置"已停止"。
+**修复方案（已实施）**：
+1. **采样与上传分离为双线程**：采样循环把完成的记录放入有界队列（上限 2000，溢出直接落 SQLite 缓存，绝不阻塞采样）；上传线程独立按固定节拍（`next_upload_at += interval`）批量 flush，末次退出前排空队列；
+2. 单条请求超时从 10s 降到 5s；`SyncService.upload_batch` 增加单轮上传上限（默认 200 条，超出部分留在缓存）；
+3. `BackgroundRunner` 新增 `on_error` 回调；托盘接入：采集线程异常时托盘变红 + balloon 通知显示错误摘要 + ERROR 日志（不再静默）。
 
 **验收标准**：
-- 单测：上传阻塞（模拟慢响应）期间采样仍持续产生记录；退出时最终 flush 不丢内存记录；
-- 手动验证：断网 10 分钟后恢复，采样无缺口、补传无重复（结合 C3）。
+- [x] 单测：上传阻塞 1.2s 期间采样计数持续增长（`test_sampling_continues_while_upload_is_blocked`）；runner 异常触发 on_error；
+- [x] 单测：单轮上传上限（pending 3 条/上限 2 → 上传 2 缓存 1；新记录同理）；
+- [x] 桌面客户端 50/50 通过（含既有 C2 重登、C3 幂等测试全绿）。
+
+**证据**：提交见 git log（"Split sampling and upload threads, surface collection errors (H8)"）。
 
 ## H9 · 强制改密页校验缺失 [ ]
 

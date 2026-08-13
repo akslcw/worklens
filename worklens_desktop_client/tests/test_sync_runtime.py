@@ -1,4 +1,5 @@
 import threading
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -262,6 +263,68 @@ class SyncRuntimeTests(unittest.TestCase):
             )
 
         self.assertEqual(1, len(stopped_events))
+
+    def test_sampling_continues_while_upload_is_blocked(self) -> None:
+        """H8: uploads run on a separate thread, so slow HTTP does not stop
+        sampling."""
+        runtime = self.make_runtime()
+        upload_started = threading.Event()
+        release_upload = threading.Event()
+
+        class BlockingSyncService:
+            def __init__(self, client, store) -> None:
+                self.client = client
+                self.store = store
+                self.upload_calls = 0
+
+            def upload_batch(self, token, records):
+                self.upload_calls += 1
+                if self.upload_calls == 2:
+                    upload_started.set()
+                    release_upload.wait(timeout=5)
+                return SimpleNamespace(
+                    uploaded_count=0,
+                    cached_count=0,
+                    failure_code=None,
+                    failure_message=None,
+                )
+
+        class CountingTracker:
+            def __init__(self) -> None:
+                self.observe_calls = 0
+
+            def observe(self, app_name, observed_at) -> None:
+                self.observe_calls += 1
+
+            def cutoff(self, flush_at):
+                return []
+
+        blocking_service = BlockingSyncService(None, None)
+        tracker = CountingTracker()
+
+        with patch("worklens_desktop_client.sync_runtime.WorkLensApiClient", FakeApiClient), \
+                patch("worklens_desktop_client.sync_runtime.SyncService", lambda client, store: blocking_service), \
+                patch("worklens_desktop_client.sync_runtime.ActivityTracker", lambda: tracker), \
+                patch("worklens_desktop_client.sync_runtime.Win32ActivityProbe", FakeActivityProbe), \
+                patch("worklens_desktop_client.sync_runtime.LocalRecordStore", lambda cache_db: object()):
+            thread = threading.Thread(
+                target=runtime.run,
+                kwargs={
+                    "username": "employee.alice",
+                    "password": "Password123!",
+                    "stop_event": threading.Event(),
+                    "duration_seconds": 4,
+                },
+            )
+            thread.start()
+
+            self.assertTrue(upload_started.wait(timeout=3))
+            observe_calls_while_blocked = tracker.observe_calls
+            time.sleep(1.2)
+            self.assertGreater(tracker.observe_calls, observe_calls_while_blocked)
+            release_upload.set()
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
 
 
 if __name__ == "__main__":

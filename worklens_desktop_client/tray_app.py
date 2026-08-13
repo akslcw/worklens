@@ -182,7 +182,15 @@ def main() -> None:
             logger.exception("Background collection stopped unexpectedly.")
             raise
 
-    runner = BackgroundRunner(worker=worker, on_status_change=update_status)
+    def notify_collection_error(error: Exception) -> None:
+        status_holder["value"] = "STOPPED"
+        refresh_icon()
+        logger.error("Background collection stopped: %s", error)
+        icon = icon_holder.get("icon")
+        if icon is not None:
+            icon.notify(f"采集已停止：{error}", "WorkLens")
+
+    runner = BackgroundRunner(worker=worker, on_status_change=update_status, on_error=notify_collection_error)
 
     def status_text(_) -> str:
         return format_status_menu_text(status_holder["value"], display_name_holder["value"])

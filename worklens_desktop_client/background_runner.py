@@ -5,9 +5,15 @@ from collections.abc import Callable
 
 
 class BackgroundRunner:
-    def __init__(self, worker: Callable[[threading.Event], None], on_status_change: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        worker: Callable[[threading.Event], None],
+        on_status_change: Callable[[str], None],
+        on_error: Callable[[Exception], None] | None = None,
+    ) -> None:
         self._worker = worker
         self._on_status_change = on_status_change
+        self._on_error = on_error
         self._stop_event = threading.Event()
         self._running_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -39,5 +45,7 @@ class BackgroundRunner:
             self._worker(self._stop_event)
         except Exception as error:  # pragma: no cover - exercised in tests
             self.last_error = error
+            if self._on_error is not None:
+                self._on_error(error)
         finally:
             self._on_status_change("STOPPED")

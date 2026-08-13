@@ -212,6 +212,51 @@ class SyncServiceTests(unittest.TestCase):
             pending_records = store.list_pending_records()
             self.assertEqual(1, len(pending_records))
             self.assertEqual("chrome.exe", pending_records[0].app_name)
+    def test_upload_batch_caps_pending_records_per_call(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LocalRecordStore(str(Path(temp_dir) / "cache.sqlite3"))
+            store.add_records([
+                ActivityRecord(
+                    app_name=f"app-{index}.exe",
+                    started_at=datetime.fromisoformat("2026-07-04T14:00:00"),
+                    ended_at=datetime.fromisoformat("2026-07-04T14:05:00"),
+                )
+                for index in range(3)
+            ])
+            api_client = FakeApiClient()
+            service = SyncService(api_client, store)
+
+            report = service.upload_batch("token-1", [], max_batch_size=2)
+
+            self.assertEqual(2, report.uploaded_count)
+            self.assertEqual(1, report.cached_count)
+            self.assertEqual(2, len(api_client.calls))
+            pending_records = store.list_pending_records()
+            self.assertEqual(1, len(pending_records))
+            self.assertEqual("app-2.exe", pending_records[0].app_name)
+
+    def test_upload_batch_caches_new_records_beyond_batch_capacity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LocalRecordStore(str(Path(temp_dir) / "cache.sqlite3"))
+            api_client = FakeApiClient()
+            service = SyncService(api_client, store)
+            records = [
+                ActivityRecord(
+                    app_name=f"app-{index}.exe",
+                    started_at=datetime.fromisoformat("2026-07-04T14:00:00"),
+                    ended_at=datetime.fromisoformat("2026-07-04T14:05:00"),
+                )
+                for index in range(3)
+            ]
+
+            report = service.upload_batch("token-1", records, max_batch_size=2)
+
+            self.assertEqual(2, report.uploaded_count)
+            self.assertEqual(1, report.cached_count)
+            self.assertEqual(2, len(api_client.calls))
+            pending_records = store.list_pending_records()
+            self.assertEqual(1, len(pending_records))
+            self.assertEqual("app-2.exe", pending_records[0].app_name)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import queue
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from worklens_desktop_client.activity_tracker import ActivityRecord
 from worklens_desktop_client.activity_tracker import ActivityTracker
 from worklens_desktop_client.api_client import LoginError
 from worklens_desktop_client.api_client import LoginResult
@@ -24,6 +26,11 @@ class SyncRuntimeConfig:
 
 
 class SyncRuntime:
+    # Bounded in-memory hand-off between the sampling loop and the upload
+    # worker; overflow spills to the local cache instead of blocking sampling.
+    MAX_QUEUED_RECORDS = 2000
+    AUTH_FAILURE_CODES = ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED")
+
     def __init__(self, config: SyncRuntimeConfig, logger=None, on_login=None, on_upload_stopped=None) -> None:
         self._config = config
         self._logger = logger or (lambda message: print(message))
@@ -48,6 +55,7 @@ class SyncRuntime:
         probe = Win32ActivityProbe(idle_threshold_seconds=self._config.idle_threshold_seconds)
         store = LocalRecordStore(self._config.cache_db)
         sync_service = SyncService(client, store)
+        upload_queue: queue.Queue[ActivityRecord] = queue.Queue(maxsize=self.MAX_QUEUED_RECORDS)
 
         if login_result is None:
             login_result = client.login(username, password)
@@ -88,16 +96,48 @@ class SyncRuntime:
             self._logger(f"Session refreshed for {refreshed.username}. Uploads resume.")
             return True
 
+        def queue_records(records: list[ActivityRecord]) -> None:
+            if not records:
+                return
+            overflow: list[ActivityRecord] = []
+            for record in records:
+                try:
+                    upload_queue.put_nowait(record)
+                except queue.Full:
+                    overflow.append(record)
+            if overflow:
+                store.add_records(overflow)
+                self._logger(f"Upload queue full; cached {len(overflow)} records locally.")
+
+        def upload_worker() -> None:
+            pending: list[ActivityRecord] = []
+            next_upload_at = time.time() + self._config.upload_interval_seconds
+            while not stop_event.is_set():
+                try:
+                    pending.append(upload_queue.get(timeout=0.5))
+                except queue.Empty:
+                    pass
+                if time.time() >= next_upload_at:
+                    next_upload_at += self._config.upload_interval_seconds
+                    report = self._upload(sync_service, login_result_holder[0].token, pending)
+                    pending = []
+                    if report is not None and report.failure_code in self.AUTH_FAILURE_CODES:
+                        reauthenticate()
+            while True:
+                try:
+                    pending.append(upload_queue.get_nowait())
+                except queue.Empty:
+                    break
+            if pending:
+                self._upload(sync_service, login_result_holder[0].token, pending)
+
         startup_report = sync_service.upload_batch(login_result_holder[0].token, [])
         self._logger(
             f"Startup retry complete: uploaded={startup_report.uploaded_count}, cached={startup_report.cached_count}"
         )
         self._log_upload_failure(startup_report)
-        if startup_report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
+        if startup_report.failure_code in self.AUTH_FAILURE_CODES:
             reauthenticate()
-
-        started_at = time.time()
-        next_upload_at = time.time() + self._config.upload_interval_seconds
 
         self._logger(
             "Running sync client. "
@@ -106,17 +146,20 @@ class SyncRuntime:
             f"upload_interval={self._config.upload_interval_seconds}s."
         )
 
+        upload_thread = threading.Thread(target=upload_worker, daemon=True, name="WorkLensUploader")
+        upload_thread.start()
+
+        started_at = time.time()
+        next_flush_at = time.time() + self._config.upload_interval_seconds
         while not stop_event.is_set():
             observed_at = datetime.now().replace(microsecond=0)
             app_name = probe.sample_app_name()
             tracker.observe(app_name, observed_at)
             self._logger(f"[{observed_at.isoformat(timespec='seconds')}] sampled {app_name}")
 
-            if time.time() >= next_upload_at:
-                report = self._flush_records(sync_service, login_result_holder[0].token, tracker, observed_at)
-                if report is not None and report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
-                    reauthenticate()
-                next_upload_at = time.time() + self._config.upload_interval_seconds
+            if time.time() >= next_flush_at:
+                next_flush_at = time.time() + self._config.upload_interval_seconds
+                queue_records(tracker.cutoff(observed_at))
 
             if duration_seconds is not None and time.time() - started_at >= duration_seconds:
                 break
@@ -124,21 +167,13 @@ class SyncRuntime:
                 break
 
         finished_at = datetime.now().replace(microsecond=0)
-        final_report = self._flush_records(sync_service, login_result_holder[0].token, tracker, finished_at)
-        if final_report is not None and final_report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
-            reauthenticate()
+        queue_records(tracker.cutoff(finished_at))
+        stop_event.set()
+        upload_thread.join()
 
-    def _flush_records(
-        self,
-        sync_service: SyncService,
-        token: str,
-        tracker: ActivityTracker,
-        flush_at: datetime,
-    ):
-        records = tracker.cutoff(flush_at)
+    def _upload(self, sync_service: SyncService, token: str, records: list[ActivityRecord]):
         report = sync_service.upload_batch(token, records)
         self._logger(
-            f"[{flush_at.isoformat(timespec='seconds')}] "
             f"flush complete: uploaded={report.uploaded_count}, cached={report.cached_count}"
         )
         self._log_upload_failure(report)
