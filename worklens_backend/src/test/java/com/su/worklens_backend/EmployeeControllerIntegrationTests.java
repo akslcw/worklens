@@ -13,6 +13,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -260,8 +263,128 @@ class EmployeeControllerIntegrationTests extends PostgresIntegrationTestSupport 
                         .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isNotFound());
 
-        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM employees WHERE id = ?", Integer.class, employeeId);
-        assertThat(count).isZero();
+        Map<String, Object> persisted = jdbcTemplate.queryForMap(
+                "SELECT deleted_at FROM employees WHERE id = ?",
+                employeeId
+        );
+        assertThat(persisted.get("deleted_at")).isNotNull();
+
+        Integer activeCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM employees WHERE deleted_at IS NULL",
+                Integer.class
+        );
+        assertThat(activeCount).isEqualTo(1);
+    }
+
+    @Test
+    void deletingEmployeeSoftDeletesAndPreservesUsageAndAccessData() throws Exception {
+        String managerToken = insertManagerAndLogin();
+        long employeeId = createEmployee(managerToken, "Alice", "E001");
+        String employeeToken = loginAndReadToken("E001", readInitialPassword(managerToken, "E001"));
+
+        jdbcTemplate.update(
+                "INSERT INTO usage_records (employee_id, app_name, started_at, ended_at, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                employeeId, "Chrome", java.sql.Timestamp.valueOf("2026-07-08 09:00:00"), java.sql.Timestamp.valueOf("2026-07-08 10:00:00")
+        );
+        jdbcTemplate.update(
+                "INSERT INTO detail_access_requests (requester_employee_id, target_employee_id, reason, status, created_at) VALUES (?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)",
+                employeeId, employeeId, "Audit record retention"
+        );
+
+        mockMvc.perform(delete("/employees/{id}", employeeId)
+                        .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isNoContent());
+
+        Integer usageCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM usage_records WHERE employee_id = ?",
+                Integer.class,
+                employeeId
+        );
+        Integer requestCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM detail_access_requests WHERE target_employee_id = ?",
+                Integer.class,
+                employeeId
+        );
+        assertThat(usageCount).isEqualTo(1);
+        assertThat(requestCount).isEqualTo(1);
+
+        Map<String, Object> account = jdbcTemplate.queryForMap(
+                "SELECT employee_id FROM auth_users WHERE username = 'E001'"
+        );
+        assertThat(account.get("employee_id")).isNull();
+
+        mockMvc.perform(get("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updatingEmployeeNoSyncsLoginUsername() throws Exception {
+        String managerToken = insertManagerAndLogin();
+        long employeeId = createEmployee(managerToken, "Alice", "E001");
+        String initialPassword = readInitialPassword(managerToken, "E001");
+
+        mockMvc.perform(put("/employees/{id}", employeeId)
+                        .header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Alice Zhang",
+                                  "employeeNo": "E009"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeNo").value("E009"));
+
+        login("E009", initialPassword)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("E009"));
+        login("E001", initialPassword)
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void duplicateEmployeeNoReturnsConflict() throws Exception {
+        String managerToken = insertManagerAndLogin();
+        createEmployee(managerToken, "Alice", "E001");
+        long bobEmployeeId = createEmployee(managerToken, "Bob", "E002");
+
+        mockMvc.perform(post("/employees")
+                        .header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Carol",
+                                  "employeeNo": "E001"
+                                }
+                                """))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(put("/employees/{id}", bobEmployeeId)
+                        .header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Bob",
+                                  "employeeNo": "E001"
+                                }
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    private String readInitialPassword(String managerToken, String employeeNo) throws Exception {
+        List<Map<String, Object>> created = jdbcTemplate.queryForList(
+                "SELECT e.id FROM employees e WHERE e.employee_no = ? AND e.deleted_at IS NULL",
+                employeeNo
+        );
+        assertThat(created).hasSize(1);
+        MvcResult resetResult = mockMvc.perform(post("/employees/{id}/reset-password", created.get(0).get("id"))
+                        .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(resetResult.getResponse().getContentAsString())
+                .path("initialPassword")
+                .asText();
     }
 
     private void insertUser(String username, String passwordHash, String role, String employeeNo, String name) {

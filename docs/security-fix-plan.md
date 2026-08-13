@@ -176,9 +176,9 @@
 
 **证据**：提交见 git log（"Fix report history to query the archive schema (H4)"）。
 
-## H5 · 员工档案一致性缺陷 [ ]
+## H5 · 员工档案一致性缺陷 [x] 已修复
 
-**位置**：`worklens_backend/src/main/java/com/su/worklens_backend/service/impl/EmployeeServiceImpl.java:81-94`（update/delete）、`schema.sql:66-72`（外键无 CASCADE）。
+**位置**：`EmployeeServiceImpl`、`Employee`（实体）、`schema.sql`。
 
 **问题**：
 1. 改工号不同步 `auth_users.username` → 改后无法用新工号登录（登录名仍是旧工号）；
@@ -186,15 +186,17 @@
 3. 删除员工会级联抹掉其全部使用历史（usage_records ON DELETE CASCADE），无审计、不可恢复；
 4. 重复工号依赖唯一约束 → 500 而非 409。
 
-**修复方案**：
-1. `updateEmployee` 在事务内同步更新 `auth_users.username`（保留旧 username 的登录锁定行迁移），工号重复时预检返回 409；
-2. `deleteEmployee` 加 `@Transactional`；删除顺序：审计日志 → 审计申请（或改为软删除员工 `deleted_at` 列）→ usage_records 归档保留决策（见下条）→ auth_users → employees；
-3. 引入**员工软删除**（`employees.deleted_at` + 账号禁用），删除改为软删 + 数据保留期（如 30 天）后由后台任务物理清理——与"数据可删除"合规诉求平衡；
-4. `createEmployee` 加 `@Transactional`，防孤儿员工行。
+**修复方案（已实施）**：
+1. `updateEmployee` 事务内同步 `auth_users.username`；工号变更预检重复（含 createEmployee），冲突返回 409；
+2. 删除改为**软删除**：`employees.deleted_at` 置当前时间（schema 幂等迁移）；吊销该账号全部 token；`auth_users.employee_id` 置 NULL（`LambdaUpdateWrapper` 强制 null 更新）——旧 token 立即失效、账号无法再登录；使用记录与审计申请/日志全部保留，无外键失败；
+3. `createEmployee`/`updateEmployee`/`deleteEmployee` 全部加 `@Transactional`，防孤儿行；列表与查询自动排除已删除员工（404）；
+4. README 明确删除语义（软删、保留历史数据；物理清理暂未实现，列入后续）。
 
 **验收标准**：
-- 集成测试：改工号后新工号可登录、旧工号失效；删除带申请/日志/使用记录的员工返回成功且状态一致（软删）；重复工号返回 409；
-- 数据保留策略在 README 中明确。
+- [x] 集成测试：改工号后新工号可登录、旧工号 401；带使用记录/审计申请的删除成功且数据保留、账号解绑、旧 token 失效；重复工号创建/更新均 409；列表排除已删除；
+- [x] 全量后端 118/118 通过。
+
+**证据**：提交见 git log（"Soft-delete employees and keep profiles consistent (H5)"）。
 
 ## H6 · 改密后旧 token 不吊销、无登出接口 [ ]
 

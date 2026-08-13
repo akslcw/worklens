@@ -37,6 +37,9 @@ ALTER TABLE auth_users
     ADD CONSTRAINT auth_users_employee_id_fkey
     FOREIGN KEY (employee_id) REFERENCES employees(id);
 
+ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+
 CREATE TABLE IF NOT EXISTS auth_login_attempts (
     username VARCHAR(100) PRIMARY KEY,
     failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),

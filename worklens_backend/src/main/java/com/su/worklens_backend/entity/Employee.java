@@ -21,6 +21,9 @@ public class Employee {
     @TableField("created_at")
     private LocalDateTime createdAt;
 
+    @TableField("deleted_at")
+    private LocalDateTime deletedAt;
+
     public Long getId() {
         return id;
     }
@@ -51,5 +54,13 @@ public class Employee {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }
