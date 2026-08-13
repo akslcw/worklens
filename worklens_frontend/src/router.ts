@@ -116,12 +116,12 @@ function guardRoute(to: RouteLocationNormalized) {
     return '/login'
   }
 
-  if (to.meta.guestOnly && session) {
-    return resolveHomePath(session.role)
-  }
-
   if (session?.mustChangePassword && to.path !== '/change-password') {
     return '/change-password'
+  }
+
+  if (to.meta.guestOnly && session) {
+    return resolveHomePath(session.role)
   }
 
   if (!session?.mustChangePassword && to.path === '/change-password' && session) {

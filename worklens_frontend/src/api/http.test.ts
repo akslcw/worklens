@@ -26,4 +26,18 @@ describe('HTTP authentication handling', () => {
     expect(sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
     expect(unauthorizedHandler).toHaveBeenCalledOnce()
   })
+
+  it('does not treat a login 401 as an expired session', async () => {
+    const unauthorizedHandler = vi.fn()
+    setUnauthorizedHandler(unauthorizedHandler)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ message: 'Invalid username or password' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+
+    await expect(request('/auth/login', { method: 'POST', body: '{}' }))
+      .rejects.toThrow('Invalid username or password')
+
+    expect(unauthorizedHandler).not.toHaveBeenCalled()
+  })
 })

@@ -143,6 +143,24 @@ describe('App routing', () => {
     expect(wrapper.text()).toContain('员工档案管理')
   })
 
+  it('sends must-change-password users straight to the change password page', async () => {
+    sessionStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        token: 'stored-token',
+        username: 'E001',
+        role: 'EMPLOYEE',
+        mustChangePassword: true,
+      }),
+    )
+
+    const router = createAppRouter(createMemoryHistory())
+    router.push('/login')
+    await router.isReady()
+
+    expect(router.currentRoute.value.fullPath).toBe('/change-password')
+  })
+
   it('redirects unknown routes instead of rendering a blank page', async () => {
     const router = createAppRouter(createMemoryHistory())
     router.push('/missing-page')

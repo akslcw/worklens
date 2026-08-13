@@ -30,6 +30,9 @@ const form = reactive({
   employeeNo: '',
 })
 
+const showPassword = ref(false)
+const copiedPassword = ref(false)
+
 onMounted(async () => {
   await loadEmployees()
 })
@@ -69,11 +72,11 @@ async function handleCreateEmployee() {
     )
 
     employees.value = [...employees.value, createdEmployee].sort((left, right) => left.id - right.id)
-    resetResult.value = {
+    showResetResult({
       username: createdEmployee.employeeNo,
       initialPassword: createdEmployee.initialPassword,
       mustChangePassword: createdEmployee.mustChangePassword,
-    }
+    })
     form.name = ''
     form.employeeNo = ''
   } catch (error) {
@@ -85,6 +88,14 @@ async function handleCreateEmployee() {
 
 async function handleDeleteEmployee(id: number) {
   if (!session?.token || deletingId.value !== null) {
+    return
+  }
+
+  const employee = employees.value.find((item) => item.id === id)
+  const confirmed = window.confirm(
+    `确定删除员工「${employee?.name ?? id}」吗？其登录账号将停用，历史数据会保留。`,
+  )
+  if (!confirmed) {
     return
   }
 
@@ -110,12 +121,40 @@ async function handleResetPassword(id: number) {
   errorMessage.value = ''
 
   try {
-    resetResult.value = await resetEmployeePassword(id, session.token)
+    showResetResult(await resetEmployeePassword(id, session.token))
   } catch (error) {
     errorMessage.value = toErrorMessage(error, '密码重置失败。')
   } finally {
     resettingId.value = null
   }
+}
+
+function showResetResult(result: ResetEmployeePasswordResponse) {
+  resetResult.value = result
+  showPassword.value = false
+  copiedPassword.value = false
+}
+
+function togglePasswordVisibility() {
+  showPassword.value = !showPassword.value
+}
+
+function copyInitialPassword() {
+  if (!resetResult.value) {
+    return
+  }
+  void navigator.clipboard
+    ?.writeText(resetResult.value.initialPassword)
+    .then(() => {
+      copiedPassword.value = true
+    })
+    .catch(() => {})
+}
+
+function dismissResetResult() {
+  resetResult.value = null
+  showPassword.value = false
+  copiedPassword.value = false
 }
 
 async function handleLogout() {
@@ -246,9 +285,21 @@ function toErrorMessage(error: unknown, fallback: string) {
           </li>
         </ul>
 
-        <p v-if="resetResult" class="feedback" role="status">
-          账号 {{ resetResult.username }} 的初始密码为 {{ resetResult.initialPassword }}，首次登录后必须修改密码。
-        </p>
+        <div v-if="resetResult" class="feedback" role="status">
+          <p class="feedback-row">
+            账号 {{ resetResult.username }} 的初始密码已生成，仅显示一次：
+            <button data-test="toggle-password-visibility" class="secondary-button" type="button" @click="togglePasswordVisibility">
+              {{ showPassword ? '隐藏' : '显示' }}
+            </button>
+            <button data-test="copy-password" class="secondary-button" type="button" @click="copyInitialPassword">复制</button>
+            <button data-test="dismiss-password" class="ghost-button" type="button" @click="dismissResetResult">关闭</button>
+          </p>
+          <p v-if="showPassword" class="panel-note">
+            <code data-test="initial-password-value">{{ resetResult.initialPassword }}</code>
+          </p>
+          <p v-if="copiedPassword" class="panel-note">已复制到剪贴板。</p>
+          <p class="panel-note">首次登录后必须修改密码。</p>
+        </div>
       </article>
     </section>
   </main>

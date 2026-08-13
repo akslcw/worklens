@@ -330,19 +330,25 @@
 
 **证据**：提交见 git log（"Restrict and rate-limit the LLM test endpoint (M4)"）。
 
-## M5 · 前端纵深防御与交互缺陷 [ ]
+## M5 · 前端纵深防御与交互缺陷 [x] 已修复
 
-**位置**：`router.ts:113-133`、`api/auth.ts:45`（getCurrentUser 未用）、`http.ts:22-25`、`ManagerHomeView.vue:84-100,249-251`、`index.html`/`nginx.conf`。
+**位置**：`auth/startup.ts`（新增）、`main.ts`、`api/http.ts`、`router.ts`、`ManagerHomeView.vue`、`nginx.conf`。
 
 **问题**：守卫信任可篡改的 sessionStorage（后端有兜底但页面结构会暴露）；`/auth/me` 未用于启动校验；401 把"密码错误"与会话过期混同（登录页会触发整页替换）；删除员工无确认；临时密码明文常驻 DOM；无 CSP 与安全响应头。
 
-**修复方案**：
-1. 应用启动时调 `/auth/me` 刷新 session（角色以服务端为准，token 失效即登出）；
-2. 登录接口 401 不触发全局 unauthorizedHandler；守卫 guestOnly 分支先判 `mustChangePassword`；
-3. 删除员工加二次确认；临时密码改为"点击显示 + 复制按钮"，显示后清空组件状态；
-4. `nginx.conf` 加 `Content-Security-Policy: default-src 'self'`、`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy`。
+**修复方案（已实施）**：
+1. 启动校验：`validateStoredSession()` 在挂载前调用 `/auth/me`，以服务端返回覆盖本地 role/mustChangePassword，失败即清会话（落地到 `/login`）；
+2. 401 区分：`http.ts` 对 `/auth/login` 的 401 豁免全局登出/重定向处理；
+3. 守卫顺序：`mustChangePassword` 检查提前到 guestOnly 之前，强制改密用户访问 `/login` 直接跳改密页；
+4. 交互：删除员工加 `window.confirm` 二次确认（说明账号停用、历史保留）；临时密码默认隐藏，改为"显示/复制/关闭"按钮，可随时清空；
+5. `nginx.conf` 增加 `Content-Security-Policy`（script-src 'self'）、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`。
 
-**验收标准**：前端单测覆盖：启动校验失败登出、登录 401 不重定向、删除需确认；nginx 配置加载无警告（`docker compose up` 健康检查通过）。
+**验收标准**：
+- [x] 单测：`startup.test.ts` 3 用例（服务端角色覆盖、401 清会话、无会话不请求）；`http.test.ts` 登录 401 不触发全局处理；删除取消不发请求；临时密码默认隐藏、点击显示；
+- [x] App 路由测试：强制改密用户访问 /login 直达 /change-password；
+- [x] 前端 45/45、生产构建通过。
+
+**证据**：提交见 git log（"Add startup session validation and frontend hardening (M5)"）。
 
 ## M6 · 桌面客户端健壮性补强 [ ]
 
