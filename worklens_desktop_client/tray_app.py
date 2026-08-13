@@ -126,6 +126,17 @@ def main() -> None:
         display_name_holder["value"] = login_result.display_name
         refresh_icon()
 
+    def notify_upload_stopped() -> None:
+        status_holder["value"] = "STOPPED"
+        refresh_icon()
+        icon = icon_holder.get("icon")
+        if icon is not None:
+            icon.notify(
+                "登录会话已失效且自动重登失败。采集已暂停，数据仍保存在本机缓存中；"
+                "请在网页端检查账号状态后重启客户端以恢复上传。",
+                "WorkLens",
+            )
+
     runtime = SyncRuntime(
         SyncRuntimeConfig(
             base_url=base_url,
@@ -136,6 +147,7 @@ def main() -> None:
         ),
         logger=logger.info,
         on_login=update_login_user,
+        on_upload_stopped=notify_upload_stopped,
     )
 
     try:

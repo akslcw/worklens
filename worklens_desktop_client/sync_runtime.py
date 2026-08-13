@@ -24,10 +24,11 @@ class SyncRuntimeConfig:
 
 
 class SyncRuntime:
-    def __init__(self, config: SyncRuntimeConfig, logger=None, on_login=None) -> None:
+    def __init__(self, config: SyncRuntimeConfig, logger=None, on_login=None, on_upload_stopped=None) -> None:
         self._config = config
         self._logger = logger or (lambda message: print(message))
         self._on_login = on_login or (lambda login_result: None)
+        self._on_upload_stopped = on_upload_stopped
 
     def login(self, username: str, password: str) -> LoginResult:
         login_result = WorkLensApiClient(self._config.base_url).login(username, password)
@@ -54,11 +55,46 @@ class SyncRuntime:
 
         self._on_login(login_result)
         self._logger(f"Login succeeded for {login_result.username} ({login_result.role}).")
-        startup_report = sync_service.upload_batch(login_result.token, [])
+
+        login_result_holder = [login_result]
+        relogin_state = {
+            "last_attempt": 0.0,
+            "backoff_seconds": 60.0,
+            "stopped_notified": False,
+        }
+
+        def reauthenticate() -> bool:
+            now = time.time()
+            if now - relogin_state["last_attempt"] < relogin_state["backoff_seconds"]:
+                return False
+            relogin_state["last_attempt"] = now
+            try:
+                refreshed = client.login(username, password)
+                self._validate_login_result(refreshed)
+            except LoginError as error:
+                relogin_state["backoff_seconds"] = min(relogin_state["backoff_seconds"] * 2, 900.0)
+                self._logger(
+                    f"Re-login failed: {error}. Uploads remain paused; records stay cached locally. "
+                    f"Next attempt in {relogin_state['backoff_seconds']}s."
+                )
+                if not relogin_state["stopped_notified"]:
+                    relogin_state["stopped_notified"] = True
+                    if self._on_upload_stopped is not None:
+                        self._on_upload_stopped()
+                return False
+            relogin_state["backoff_seconds"] = 60.0
+            login_result_holder[0] = refreshed
+            self._on_login(refreshed)
+            self._logger(f"Session refreshed for {refreshed.username}. Uploads resume.")
+            return True
+
+        startup_report = sync_service.upload_batch(login_result_holder[0].token, [])
         self._logger(
             f"Startup retry complete: uploaded={startup_report.uploaded_count}, cached={startup_report.cached_count}"
         )
         self._log_upload_failure(startup_report)
+        if startup_report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
+            reauthenticate()
 
         started_at = time.time()
         next_upload_at = time.time() + self._config.upload_interval_seconds
@@ -77,7 +113,9 @@ class SyncRuntime:
             self._logger(f"[{observed_at.isoformat(timespec='seconds')}] sampled {app_name}")
 
             if time.time() >= next_upload_at:
-                self._flush_records(sync_service, login_result.token, tracker, observed_at)
+                report = self._flush_records(sync_service, login_result_holder[0].token, tracker, observed_at)
+                if report is not None and report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
+                    reauthenticate()
                 next_upload_at = time.time() + self._config.upload_interval_seconds
 
             if duration_seconds is not None and time.time() - started_at >= duration_seconds:
@@ -86,7 +124,9 @@ class SyncRuntime:
                 break
 
         finished_at = datetime.now().replace(microsecond=0)
-        self._flush_records(sync_service, login_result.token, tracker, finished_at)
+        final_report = self._flush_records(sync_service, login_result_holder[0].token, tracker, finished_at)
+        if final_report is not None and final_report.failure_code in ("AUTHENTICATION_FAILED", "PASSWORD_CHANGE_REQUIRED"):
+            reauthenticate()
 
     def _flush_records(
         self,
@@ -94,7 +134,7 @@ class SyncRuntime:
         token: str,
         tracker: ActivityTracker,
         flush_at: datetime,
-    ) -> None:
+    ):
         records = tracker.cutoff(flush_at)
         report = sync_service.upload_batch(token, records)
         self._logger(
@@ -102,12 +142,32 @@ class SyncRuntime:
             f"flush complete: uploaded={report.uploaded_count}, cached={report.cached_count}"
         )
         self._log_upload_failure(report)
+        return report
 
     def _log_upload_failure(self, report) -> None:
-        if report.failure_code == "PASSWORD_CHANGE_REQUIRED":
+        failure_code = report.failure_code
+        if failure_code == "PASSWORD_CHANGE_REQUIRED":
             self._logger(
                 "Upload blocked: current account must change password in the web app before desktop uploads can continue. "
                 "Records remain cached locally and will retry after the password is changed."
+            )
+        elif failure_code == "AUTHENTICATION_FAILED":
+            self._logger(
+                "Upload blocked: login session is invalid or expired. Attempting to re-login automatically. "
+                "Records remain cached locally."
+            )
+        elif failure_code == "RATE_LIMITED":
+            self._logger("Upload throttled by the server (HTTP 429). Uploads will retry later.")
+        elif failure_code == "NETWORK_TIMEOUT":
+            self._logger("Upload paused: the server did not respond in time. Records remain cached locally.")
+        elif failure_code == "NETWORK_ERROR":
+            self._logger("Upload paused: unable to reach the WorkLens server. Records remain cached locally.")
+        elif failure_code == "SERVER_ERROR":
+            self._logger("Upload paused: the WorkLens server is temporarily unavailable. Records remain cached locally.")
+        elif failure_code == "UPLOAD_REJECTED":
+            self._logger(
+                "Upload rejected by the server: %s. Records remain cached locally and will retry.",
+                report.failure_message or "unknown reason",
             )
 
     @staticmethod
