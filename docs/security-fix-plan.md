@@ -11,13 +11,15 @@
 
 ## 排期总览（建议顺序）
 
-| 批次 | 条目 | 理由 |
+| 批次 | 条目 | 状态 |
 |---|---|---|
-| P0 已完成 | C1 | 唯一实测确认的权限绕过 |
-| P1 数据完整性 | C2、C3、C4、H1、H2 | 直接决定数据可信度与隐私承诺 |
-| P2 正确性与一致性 | H3、H4、H5、H6、M1、M2 | 用户可感知的错数据/断功能 |
-| P3 客户端健壮性 | H7、H8、M6、M5（前端部分） | 采集端可靠性 |
-| P4 纵深防御与债务 | M3、M4、M9、M7、M8、M10、L1–L6 | 低概率高影响 + 技术债 |
+| P0 | C1 | ✅ 已修复 |
+| P1 数据完整性 | C2、C3、C4、H1、H2 | ✅ 已修复 |
+| P2 正确性与一致性 | H3、H4、H5、H6、M1、M2 | ✅ 已修复 |
+| P3 客户端健壮性 | H7、H8、H9、M5、M6 | ✅ 已修复 |
+| P4 纵深防御与债务 | M3、M4、M7、M8、M9、M10、L1–L6 | ✅ 已修复 |
+
+> 全部 28 项已完成（2026-08-14）。后端 131/131、前端 46/46、桌面客户端 58/58。
 
 ---
 
@@ -415,26 +417,30 @@
 
 **证据**：提交见 git log（"Harden login against enumeration and lockout DoS (M9)"）。
 
-## M10 · 前端测试与构建工具链不一致 [ ]
+## M10 · 前端测试与构建工具链不一致 [x] 已修复
 
-**位置**：`worklens_frontend/package.json`（vite 8）与 lock 中 vitest 嵌套 vite 7。
+**位置**：`worklens_frontend/package.json`、`package-lock.json`。
 
 **问题**：测试与生产用不同打包器/版本，行为可能不一致。
 
-**修复方案**：升级 vitest 至支持 Vite 8 的版本（先验证 peer 范围），CI 中锁 lock 可复现。
+**修复方案（已实施）**：升级 vitest 3.2 → 4.1.10；`npm ls vite` 确认全树共享生产用的 Vite 8.1.3（无嵌套旧版）。
 
-**验收标准**：`npm ls vite` 无重复版本；`npm test` 与 `npm run build` 均通过。
+**验收标准**：
+- [x] `npm ls vite` 无重复版本（deduped）；
+- [x] `npm test` 46/46、`npm run build` 通过。
+
+**证据**：提交 `8dea81c`。
 
 ---
 
 # Low
 
-- **L1 · token 明文入库**：`auth_tokens.token` 存明文。方案：存 SHA-256 摘要，查询时对入参哈希后比对（需重写过滤器查询路径）。验收：库中无明文 token。
-- **L2 · schema.sql 每次启动重放**：含 DROP 约束/全表 UPDATE/建索引。方案：迁移至 Flyway（或至少按版本分文件）。验收：已有数据库上重复启动无副作用。
-- **L3 · 框架版本 EOL**：Spring Boot 3.0.2 / Spring Framework 6.0.4 已 EOL，存在公开 CVE（含 CVE-2023-20860 路径匹配类）。方案：升级至最新 3.0.x 补丁版（≥3.0.8）或直接 3.2+/3.3+；升级后重跑全量测试。验收：依赖扫描无已知 CVE。
-- **L4 · PBKDF2 迭代数偏低**：120k 低于 OWASP 600k（2023+）建议。方案：迭代数升级并在 matches 中按存储参数兼容旧哈希。验收：新哈希使用新迭代数，旧哈希仍可登录。
-- **L5 · README 与实现不一致**：API key 为空字符串时 `LlmConfiguration` 启动失败，README 声称"留空也能启动"。方案：改为空值时不创建真实 provider（懒加载），或修正文档。验收：空 key 启动成功且 LLM 调用返回可读错误。
-- **L6 · 前端小项**：`http.ts` 204 处理不一致；三个死代码 API 函数（接入或删除）；错误消息原样透传（白名单/兜底文案）；`readStoredSession` 读时写副作用（迁移清理移到 `main.ts` 一次性执行）。验收：各点有对应单测或清理记录。
+- **L1 · token 明文入库** [x] 已修复：`auth_tokens.token` 改存 SHA-256 摘要（64 字符），登录返回原文、校验与登出按摘要查询。验收：集成测试断言库中值 ≠ 明文且长度为 64、token 仍可正常认证。提交 `7ff0612`。
+- **L2 · schema.sql 每次启动重放** [x] 已修复：迁移至 Flyway 11.8.2（`db/migration/V1__baseline.sql`），`baseline-on-migrate` 让既有库无副作用纳入版本管理，`spring.sql.init.mode=never`。验收：全量测试通过且测试库 `flyway_schema_history` 已记录 V1。提交 `d90bf86`。
+- **L3 · 框架版本 EOL** [x] 已修复：Spring Boot 3.0.2 → 3.5.6（Framework 6.2 / Tomcat 10.1）、MyBatis-Plus 3.5.7 → 3.5.12；DeepSeek 客户端超时分类适配 Boot 3.5 默认 JDK HttpClient。验收：全量后端 131/131 在新栈通过。提交 `d90bf86`。
+- **L4 · PBKDF2 迭代数偏低** [x] 已修复：120k → 600k（OWASP 建议）；旧哈希按存储参数继续可验证。验收：单测覆盖新哈希格式与 120k 旧哈希兼容。提交 `7ff0612`。
+- **L5 · README 与实现不一致** [x] 已修复：API key 为空不再启动失败——注入禁用 Provider，LLM 调用返回清晰错误、报告链路保留源数据（与 README 一致）。提交 `7ff0612`。
+- **L6 · 前端小项** [x] 已修复：204 返回 `undefined`；删除死代码（`viewApprovedUsageRecords`/`getUsageRecords`/`UsageRecord` 类型）；`readStoredSession` 改为纯读，legacy localStorage 清理移入启动流程。提交 `24c436a`。
 
 ---
 
