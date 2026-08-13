@@ -117,7 +117,7 @@ function toErrorMessage(error: unknown, fallback: string) {
       <div>
         <p class="eyebrow">Manager Workspace</p>
         <h1>团队效能面板</h1>
-        <p class="hero-copy">这里只消费团队聚合接口和团队报告接口，不拉任何个人明细。</p>
+        <p class="hero-copy">这里只消费团队聚合接口和团队报告接口，不拉任何个人明细。聚合指标为当日实时数据，历史数据由团队报告承载。</p>
         <div class="hero-nav">
           <ManagerWorkspaceNav current="team" />
         </div>

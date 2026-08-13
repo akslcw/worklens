@@ -146,6 +146,51 @@ class UsageRecordControllerIntegrationTests extends PostgresIntegrationTestSuppo
     }
 
     @Test
+    void createUsageRecordRejectsImplausibleWindows() throws Exception {
+        insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
+        String employeeToken = loginAndReadToken("employee.alice", PASSWORD);
+
+        mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2030-01-01T09:00:00",
+                                  "endedAt": "2030-01-01T09:30:00"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2000-01-01T09:00:00",
+                                  "endedAt": "2000-01-01T09:30:00"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2026-07-01T00:00:00",
+                                  "endedAt": "2026-07-03T00:00:00"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        Integer recordCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM usage_records", Integer.class);
+        assertThat(recordCount).isZero();
+    }
+
+    @Test
     void createUsageRecordRejectsEndBeforeStart() throws Exception {
         insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
         String employeeToken = loginAndReadToken("employee.alice", PASSWORD);

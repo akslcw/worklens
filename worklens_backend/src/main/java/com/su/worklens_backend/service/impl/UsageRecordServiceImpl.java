@@ -19,12 +19,15 @@ import com.su.worklens_backend.mapper.UsageRecordMapper;
 import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.UsageRecordService;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Date;
+import java.sql.Types;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -112,6 +115,8 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     @Override
     public UsageRecordResponse createUsageRecord(UsageRecordRequest request, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
+        validateRecordWindow(request);
+
         String clientRecordId = normalizeClientRecordId(request.getClientRecordId());
         if (clientRecordId != null) {
             UsageRecord existing = findByIdempotencyKey(authenticatedUser.getEmployeeId(), clientRecordId);
@@ -181,16 +186,39 @@ public class UsageRecordServiceImpl implements UsageRecordService {
         return clientRecordId.trim();
     }
 
+    /**
+     * M1: rejects records whose window is implausible for the desktop
+     * collector (segments are at most a few minutes long) so a forged payload
+     * cannot poison personal or team statistics.
+     */
+    private void validateRecordWindow(UsageRecordRequest request) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (request.getStartedAt().isAfter(now.plusMinutes(15))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startedAt must not be in the future");
+        }
+        if (request.getStartedAt().isBefore(now.minusDays(60))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startedAt is too far in the past");
+        }
+        if (Duration.between(request.getStartedAt(), request.getEndedAt()).compareTo(Duration.ofHours(12)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Record duration must not exceed 12 hours");
+        }
+    }
+
     @Override
     public TeamUsageSummaryResponse getTeamUsageSummary(AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, MANAGER_ROLE);
+        LocalDate today = LocalDate.now(clock);
         Map<String, Object> totals = jdbcTemplate.queryForMap(
                 """
                         SELECT COALESCE(SUM(FLOOR(EXTRACT(EPOCH FROM (ended_at - started_at)) / 60)), 0)::bigint
                                    AS total_usage_minutes,
                                COUNT(DISTINCT employee_id)::bigint AS active_employee_count
                         FROM usage_records
-                        """
+                        WHERE started_at >= ?::timestamp
+                          AND started_at < (?::date + 1)::timestamp
+                        """,
+                new Object[]{today, today},
+                new int[]{Types.TIMESTAMP, Types.DATE}
         );
         long totalUsageMinutes = ((Number) totals.get("total_usage_minutes")).longValue();
         int activeEmployeeCount = ((Number) totals.get("active_employee_count")).intValue();
@@ -210,10 +238,14 @@ public class UsageRecordServiceImpl implements UsageRecordService {
                                 SELECT app_name,
                                        SUM(FLOOR(EXTRACT(EPOCH FROM (ended_at - started_at)) / 60))::bigint AS usage_minutes
                                 FROM usage_records
+                                WHERE started_at >= ?::timestamp
+                                  AND started_at < (?::date + 1)::timestamp
                                 GROUP BY app_name
                                 HAVING SUM(FLOOR(EXTRACT(EPOCH FROM (ended_at - started_at)) / 60)) > 0
                                 ORDER BY usage_minutes DESC, app_name ASC
-                                """
+                                """,
+                        new Object[]{today, today},
+                        new int[]{Types.TIMESTAMP, Types.DATE}
                 ).stream()
                 .map(row -> {
                     long usageMinutes = ((Number) row.get("usage_minutes")).longValue();

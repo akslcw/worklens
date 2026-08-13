@@ -25,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,11 +38,11 @@ class UsageRecordServiceImplTests {
     void teamSummaryUsesDatabaseAggregatesWithoutLoadingUsageRecords() {
         UsageRecordMapper usageRecordMapper = mock(UsageRecordMapper.class);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForMap(anyString())).thenReturn(Map.of(
+        when(jdbcTemplate.queryForMap(anyString(), any(Object[].class), any(int[].class))).thenReturn(Map.of(
                 "total_usage_minutes", 135L,
                 "active_employee_count", 2L
         ));
-        when(jdbcTemplate.queryForList(anyString())).thenReturn(List.of(
+        when(jdbcTemplate.queryForList(anyString(), any(Object[].class), any(int[].class))).thenReturn(List.of(
                 Map.of("app_name", "Slack", "usage_minutes", 75L),
                 Map.of("app_name", "Chrome", "usage_minutes", 60L)
         ));

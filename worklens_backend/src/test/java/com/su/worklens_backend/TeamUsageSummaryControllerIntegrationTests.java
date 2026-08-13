@@ -9,7 +9,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -56,13 +58,16 @@ class TeamUsageSummaryControllerIntegrationTests extends PostgresIntegrationTest
     }
 
     @Test
-    void managerCanGetAggregatedTeamUsageSummaryWithoutEmployeeDetails() throws Exception {
+    void managerCanGetAggregatedTeamUsageSummaryForTodayOnly() throws Exception {
         insertUser("manager", PASSWORD_HASH, "MANAGER", "M001", "Manager User");
         long aliceEmployeeId = insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
         long bobEmployeeId = insertUser("employee.bob", PASSWORD_HASH, "EMPLOYEE", "E002", "Bob");
-        insertUsageRecord(aliceEmployeeId, "Slack", "2026-07-03 09:00:00", "2026-07-03 09:30:00");
-        insertUsageRecord(aliceEmployeeId, "Chrome", "2026-07-03 10:00:00", "2026-07-03 11:00:00");
-        insertUsageRecord(bobEmployeeId, "Slack", "2026-07-03 11:00:00", "2026-07-03 11:45:00");
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Hong_Kong"));
+        LocalDate yesterday = today.minusDays(1);
+        insertUsageRecord(aliceEmployeeId, "Slack", today.atTime(9, 0), today.atTime(9, 30));
+        insertUsageRecord(aliceEmployeeId, "Chrome", today.atTime(10, 0), today.atTime(11, 0));
+        insertUsageRecord(bobEmployeeId, "Slack", today.atTime(11, 0), today.atTime(11, 45));
+        insertUsageRecord(aliceEmployeeId, "Teams", yesterday.atTime(9, 0), yesterday.atTime(12, 0));
 
         String managerToken = loginAndReadToken("manager", PASSWORD);
 
@@ -84,6 +89,7 @@ class TeamUsageSummaryControllerIntegrationTests extends PostgresIntegrationTest
         assertThat(responseBody).doesNotContain("authUserId");
         assertThat(responseBody).doesNotContain("employeeId");
         assertThat(responseBody).doesNotContain("username");
+        assertThat(responseBody).doesNotContain("Teams");
     }
 
     private long insertUser(String username, String passwordHash, String role, String employeeNo, String name) {
@@ -108,7 +114,7 @@ class TeamUsageSummaryControllerIntegrationTests extends PostgresIntegrationTest
         return employeeId;
     }
 
-    private void insertUsageRecord(long employeeId, String appName, String startedAt, String endedAt) {
+    private void insertUsageRecord(long employeeId, String appName, LocalDateTime startedAt, LocalDateTime endedAt) {
         jdbcTemplate.update(
                 """
                         INSERT INTO usage_records (employee_id, app_name, started_at, ended_at, created_at)
@@ -116,8 +122,8 @@ class TeamUsageSummaryControllerIntegrationTests extends PostgresIntegrationTest
                         """,
                 employeeId,
                 appName,
-                LocalDateTime.parse(startedAt.replace(" ", "T")),
-                LocalDateTime.parse(endedAt.replace(" ", "T"))
+                startedAt,
+                endedAt
         );
     }
 
