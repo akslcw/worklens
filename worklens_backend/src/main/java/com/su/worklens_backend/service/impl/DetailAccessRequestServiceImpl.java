@@ -17,6 +17,7 @@ import com.su.worklens_backend.mapper.DetailAccessAuditLogMapper;
 import com.su.worklens_backend.mapper.DetailAccessRequestMapper;
 import com.su.worklens_backend.mapper.EmployeeMapper;
 import com.su.worklens_backend.mapper.UsageRecordMapper;
+import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.DetailAccessRequestService;
 import com.su.worklens_backend.service.UsageRecordService;
 import org.springframework.http.HttpStatus;
@@ -41,27 +42,33 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     private static final String STATUS_USED = "USED";
     private static final String AUTHORIZATION_USED_MESSAGE = "Detail access authorization has already been used";
     private static final String AUTHORIZATION_MISSING_MESSAGE = "Detail access authorization is expired or does not exist";
+    private static final String MANAGER_ROLE = "MANAGER";
+    private static final String EMPLOYEE_ROLE = "EMPLOYEE";
 
     private final DetailAccessAuditLogMapper detailAccessAuditLogMapper;
     private final DetailAccessRequestMapper detailAccessRequestMapper;
     private final EmployeeMapper employeeMapper;
     private final UsageRecordMapper usageRecordMapper;
     private final UsageRecordService usageRecordService;
+    private final AuthService authService;
 
     public DetailAccessRequestServiceImpl(DetailAccessAuditLogMapper detailAccessAuditLogMapper,
                                           DetailAccessRequestMapper detailAccessRequestMapper,
                                           EmployeeMapper employeeMapper,
                                           UsageRecordMapper usageRecordMapper,
-                                          UsageRecordService usageRecordService) {
+                                          UsageRecordService usageRecordService,
+                                          AuthService authService) {
         this.detailAccessAuditLogMapper = detailAccessAuditLogMapper;
         this.detailAccessRequestMapper = detailAccessRequestMapper;
         this.employeeMapper = employeeMapper;
         this.usageRecordMapper = usageRecordMapper;
         this.usageRecordService = usageRecordService;
+        this.authService = authService;
     }
 
     @Override
     public DetailAccessRequestResponse createDetailAccessRequest(DetailAccessRequestCreateRequest request, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         Employee targetEmployee = employeeMapper.selectById(request.getTargetEmployeeId());
         if (targetEmployee == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Target employee not found");
@@ -80,6 +87,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
 
     @Override
     public DetailAccessRequestResponse decideDetailAccessRequest(Long requestId, DetailAccessRequestDecisionRequest request, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
         if (detailAccessRequest == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Detail access request not found");
@@ -106,6 +114,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
 
     @Override
     public List<DetailAccessRequestResponse> listOwnDetailAccessRequests(AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         return detailAccessRequestMapper.selectList(
                         new LambdaQueryWrapper<DetailAccessRequest>()
                                 .eq(DetailAccessRequest::getRequesterEmployeeId, authenticatedUser.getEmployeeId())
@@ -117,6 +126,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
 
     @Override
     public List<EmployeeDetailAccessRequestResponse> listRequestsTargetingCurrentEmployee(AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         List<DetailAccessRequest> requests = detailAccessRequestMapper.selectList(
                 new LambdaQueryWrapper<DetailAccessRequest>()
                         .eq(DetailAccessRequest::getTargetEmployeeId, authenticatedUser.getEmployeeId())
@@ -160,6 +170,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     @Override
     @Transactional
     public List<UsageRecordResponse> viewApprovedUsageRecords(Long requestId, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
         validateViewAuthorization(detailAccessRequest, authenticatedUser);
 
@@ -178,6 +189,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     @Override
     @Transactional
     public UsageViewResponse viewApprovedUsageView(Long requestId, LocalDate date, int page, int pageSize, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
         validateViewAuthorization(detailAccessRequest, authenticatedUser);
 
@@ -194,6 +206,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
 
     @Override
     public List<DetailAccessAuditLogResponse> listAccessAuditLogs(Long requestId, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
         if (detailAccessRequest == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Detail access request not found");

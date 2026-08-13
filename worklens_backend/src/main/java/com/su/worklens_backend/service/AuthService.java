@@ -7,6 +7,8 @@ import com.su.worklens_backend.dto.LoginRequest;
 import com.su.worklens_backend.dto.LoginResponse;
 import com.su.worklens_backend.dto.PasswordChangeResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 public interface AuthService {
 
@@ -19,4 +21,16 @@ public interface AuthService {
     CurrentUserResponse getCurrentUser(HttpServletRequest request);
 
     PasswordChangeResponse changePassword(HttpServletRequest request, ChangePasswordRequest changePasswordRequest);
+
+    /**
+     * Role assertion used as defense in depth inside service implementations.
+     * The {@code AuthTokenFilter} performs the primary path-based role checks,
+     * but services must never rely on the filter alone: this guard makes any
+     * direct or filtered-bypassed call fail closed.
+     */
+    default void requireRole(AuthenticatedUser authenticatedUser, String requiredRole) {
+        if (authenticatedUser == null || !requiredRole.equals(authenticatedUser.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Insufficient role for this operation");
+        }
+    }
 }

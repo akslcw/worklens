@@ -19,5 +19,5 @@ public interface UsageRecordService {
 
     UsageRecordResponse createUsageRecord(UsageRecordRequest request, AuthenticatedUser authenticatedUser);
 
-    TeamUsageSummaryResponse getTeamUsageSummary();
+    TeamUsageSummaryResponse getTeamUsageSummary(AuthenticatedUser authenticatedUser);
 }

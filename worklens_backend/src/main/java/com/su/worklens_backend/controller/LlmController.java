@@ -18,6 +18,8 @@ import java.util.List;
 public class LlmController {
 
     static final String TEST_PROMPT = "Please respond to this fixed WorkLens connectivity check text.";
+    private static final String MANAGER_ROLE = "MANAGER";
+    private static final String EMPLOYEE_ROLE = "EMPLOYEE";
 
     private final LlmProvider llmProvider;
     private final ReportHistoryService reportHistoryService;
@@ -51,12 +53,14 @@ public class LlmController {
     @GetMapping("/llm/employee-report-history")
     public List<ReportHistoryResponse> getEmployeeReportHistory(HttpServletRequest httpServletRequest) {
         AuthenticatedUser authenticatedUser = authService.getAuthenticatedUser(httpServletRequest);
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         return reportHistoryService.listEmployeeReportHistory(authenticatedUser.getEmployeeId());
     }
 
     @GetMapping("/llm/team-report-history")
     public List<ReportHistoryResponse> getTeamReportHistory(HttpServletRequest httpServletRequest) {
         AuthenticatedUser authenticatedUser = authService.getAuthenticatedUser(httpServletRequest);
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         return reportHistoryService.listTeamReportHistory(authenticatedUser.getEmployeeId());
     }
 }

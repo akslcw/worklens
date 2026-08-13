@@ -1,6 +1,7 @@
 package com.su.worklens_backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.su.worklens_backend.auth.AuthenticatedUser;
 import com.su.worklens_backend.dto.EmployeeRequest;
 import com.su.worklens_backend.dto.CreateEmployeeResponse;
 import com.su.worklens_backend.dto.ResetEmployeePasswordResponse;
@@ -8,6 +9,7 @@ import com.su.worklens_backend.entity.AuthUser;
 import com.su.worklens_backend.entity.Employee;
 import com.su.worklens_backend.mapper.AuthUserMapper;
 import com.su.worklens_backend.mapper.EmployeeMapper;
+import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.EmployeeService;
 import com.su.worklens_backend.service.PasswordHasher;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import java.util.List;
 public class EmployeeServiceImpl implements EmployeeService {
 
     private static final String EMPLOYEE_ROLE = "EMPLOYEE";
+    private static final String MANAGER_ROLE = "MANAGER";
     private static final int TEMPORARY_PASSWORD_LENGTH = 20;
     private static final String UPPERCASE = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     private static final String LOWERCASE = "abcdefghijkmnopqrstuvwxyz";
@@ -31,17 +34,20 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final EmployeeMapper employeeMapper;
     private final AuthUserMapper authUserMapper;
+    private final AuthService authService;
     private final PasswordHasher passwordHasher;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public EmployeeServiceImpl(EmployeeMapper employeeMapper, AuthUserMapper authUserMapper, PasswordHasher passwordHasher) {
+    public EmployeeServiceImpl(EmployeeMapper employeeMapper, AuthUserMapper authUserMapper, AuthService authService, PasswordHasher passwordHasher) {
         this.employeeMapper = employeeMapper;
         this.authUserMapper = authUserMapper;
+        this.authService = authService;
         this.passwordHasher = passwordHasher;
     }
 
     @Override
-    public CreateEmployeeResponse createEmployee(EmployeeRequest request) {
+    public CreateEmployeeResponse createEmployee(EmployeeRequest request, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         Employee employee = new Employee();
         employee.setName(request.getName().trim());
         employee.setEmployeeNo(request.getEmployeeNo().trim());
@@ -62,14 +68,16 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
-    public List<Employee> listEmployees() {
+    public List<Employee> listEmployees(AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         LambdaQueryWrapper<Employee> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.orderByAsc(Employee::getId);
         return employeeMapper.selectList(queryWrapper);
     }
 
     @Override
-    public Employee getEmployeeById(Long id) {
+    public Employee getEmployeeById(Long id, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         Employee employee = employeeMapper.selectById(id);
         if (employee == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found");
@@ -78,24 +86,27 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
-    public Employee updateEmployee(Long id, EmployeeRequest request) {
-        Employee employee = getEmployeeById(id);
+    public Employee updateEmployee(Long id, EmployeeRequest request, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
+        Employee employee = getEmployeeById(id, authenticatedUser);
         employee.setName(request.getName().trim());
         employee.setEmployeeNo(request.getEmployeeNo().trim());
         employeeMapper.updateById(employee);
-        return getEmployeeById(id);
+        return getEmployeeById(id, authenticatedUser);
     }
 
     @Override
-    public void deleteEmployee(Long id) {
-        Employee employee = getEmployeeById(id);
+    public void deleteEmployee(Long id, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
+        Employee employee = getEmployeeById(id, authenticatedUser);
         authUserMapper.delete(new LambdaQueryWrapper<AuthUser>().eq(AuthUser::getEmployeeId, employee.getId()));
         employeeMapper.deleteById(employee.getId());
     }
 
     @Override
-    public ResetEmployeePasswordResponse resetEmployeePassword(Long id) {
-        Employee employee = getEmployeeById(id);
+    public ResetEmployeePasswordResponse resetEmployeePassword(Long id, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
+        Employee employee = getEmployeeById(id, authenticatedUser);
         AuthUser authUser = authUserMapper.selectOne(
                 new LambdaQueryWrapper<AuthUser>().eq(AuthUser::getEmployeeId, employee.getId())
         );

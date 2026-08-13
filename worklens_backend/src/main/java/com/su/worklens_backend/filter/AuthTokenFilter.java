@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 @Component
@@ -41,7 +43,12 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String requestPath = request.getRequestURI();
+        String requestPath = resolveRequestPath(request);
+        if (requestPath == null) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid encoded request path");
+            return;
+        }
+
         String requestMethod = request.getMethod().toUpperCase(Locale.ROOT);
         if (LOGIN_PATH.equals(requestPath) || HEALTH_PATH.equals(requestPath)) {
             filterChain.doFilter(request, response);
@@ -115,5 +122,31 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Resolves the path used for authorization checks so that it agrees with the
+     * path Spring MVC matches against. The container keeps the raw (still
+     * percent-encoded) URI in {@link HttpServletRequest#getRequestURI()}, while
+     * servlet mapping and Spring's PathPatternParser match the decoded path.
+     * Comparing the raw URI therefore allows requests such as GET /%65mployees
+     * to skip the prefix checks below and still reach the /employees handler.
+     *
+     * Encodings that could alter path structure after decoding (encoded slash,
+     * backslash, dot, or a second decoding round) are rejected outright.
+     */
+    private String resolveRequestPath(HttpServletRequest request) {
+        String rawUri = request.getRequestURI();
+        String lowerUri = rawUri.toLowerCase(Locale.ROOT);
+        if (lowerUri.contains("%2f") || lowerUri.contains("%5c")
+                || lowerUri.contains("%2e") || lowerUri.contains("%25")) {
+            return null;
+        }
+        try {
+            return URLDecoder.decode(rawUri, StandardCharsets.UTF_8)
+                    .replaceAll("/{2,}", "/");
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 }

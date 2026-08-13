@@ -16,6 +16,7 @@ import com.su.worklens_backend.dto.UsageSegmentResponse;
 import com.su.worklens_backend.dto.UsageViewResponse;
 import com.su.worklens_backend.entity.UsageRecord;
 import com.su.worklens_backend.mapper.UsageRecordMapper;
+import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.UsageRecordService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -38,19 +39,25 @@ import java.util.stream.Collectors;
 public class UsageRecordServiceImpl implements UsageRecordService {
 
     private static final long ADJACENT_RECORD_TOLERANCE_SECONDS = 15;
+    private static final String EMPLOYEE_ROLE = "EMPLOYEE";
+    private static final String MANAGER_ROLE = "MANAGER";
 
     private final UsageRecordMapper usageRecordMapper;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final AuthService authService;
 
-    public UsageRecordServiceImpl(UsageRecordMapper usageRecordMapper, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public UsageRecordServiceImpl(UsageRecordMapper usageRecordMapper, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+                                  AuthService authService) {
         this.usageRecordMapper = usageRecordMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.authService = authService;
     }
 
     @Override
     public List<UsageRecordResponse> listUsageRecords(AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         return usageRecordMapper.selectList(
                         new LambdaQueryWrapper<UsageRecord>()
                                 .eq(UsageRecord::getEmployeeId, authenticatedUser.getEmployeeId())
@@ -62,6 +69,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
 
     @Override
     public UsageViewResponse getUsageView(AuthenticatedUser authenticatedUser, LocalDate date, int page, int pageSize) {
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         return getUsageViewForEmployee(authenticatedUser.getEmployeeId(), date, page, pageSize);
     }
 
@@ -99,6 +107,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
 
     @Override
     public UsageRecordResponse createUsageRecord(UsageRecordRequest request, AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
         UsageRecord latestRecord = usageRecordMapper.selectOne(
                 new LambdaQueryWrapper<UsageRecord>()
                         .eq(UsageRecord::getEmployeeId, authenticatedUser.getEmployeeId())
@@ -125,7 +134,8 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     }
 
     @Override
-    public TeamUsageSummaryResponse getTeamUsageSummary() {
+    public TeamUsageSummaryResponse getTeamUsageSummary(AuthenticatedUser authenticatedUser) {
+        authService.requireRole(authenticatedUser, MANAGER_ROLE);
         Map<String, Object> totals = jdbcTemplate.queryForMap(
                 """
                         SELECT COALESCE(SUM(FLOOR(EXTRACT(EPOCH FROM (ended_at - started_at)) / 60)), 0)::bigint
