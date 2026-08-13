@@ -31,6 +31,7 @@ class TrayAppTests(unittest.TestCase):
         logger = Mock()
 
         with patch.object(tray_app, "parse_args", return_value=args), \
+                patch.object(tray_app, "acquire_single_instance_mutex", return_value=True), \
                 patch.object(tray_app, "create_client_logger", return_value=logger), \
                 patch.object(tray_app, "WorkLensApiClient", create=True) as api_client, \
                 patch.object(tray_app, "prompt_credentials", return_value=("missing-user", "wrong-password")), \
@@ -54,6 +55,7 @@ class TrayAppTests(unittest.TestCase):
             raise ValueError("HTTPS is required when connecting to a non-local WorkLens server.")
 
         with patch.object(tray_app, "parse_args", return_value=args), \
+                patch.object(tray_app, "acquire_single_instance_mutex", return_value=True), \
                 patch.object(tray_app, "create_client_logger", return_value=logger), \
                 patch.object(tray_app, "WorkLensApiClient", create=True, side_effect=reject_invalid_client), \
                 patch.object(tray_app, "prompt_credentials") as prompt_credentials, \
@@ -64,6 +66,21 @@ class TrayAppTests(unittest.TestCase):
         show_configuration_error.assert_called_once_with(
             "HTTPS is required when connecting to a non-local WorkLens server."
         )
+        prompt_credentials.assert_not_called()
+        background_runner.assert_not_called()
+
+    def test_main_exits_when_another_instance_is_running(self) -> None:
+        args = self.make_args()
+
+        with patch.object(tray_app, "parse_args", return_value=args), \
+                patch.object(tray_app, "acquire_single_instance_mutex", return_value=False), \
+                patch.object(tray_app, "create_client_logger", return_value=Mock()), \
+                patch.object(tray_app, "show_already_running", create=True) as show_already_running, \
+                patch.object(tray_app, "prompt_credentials") as prompt_credentials, \
+                patch.object(tray_app, "BackgroundRunner") as background_runner:
+            tray_app.main()
+
+        show_already_running.assert_called_once()
         prompt_credentials.assert_not_called()
         background_runner.assert_not_called()
 

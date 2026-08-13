@@ -35,6 +35,7 @@ class SyncService:
         pending_records = self._local_store.list_pending_records()
         pending_batch = pending_records[:max_batch_size]
         completed_pending_ids: list[int] = []
+        rejected_any = False
 
         for pending_record in pending_batch:
             try:
@@ -46,9 +47,15 @@ class SyncService:
                     client_record_id=pending_record.client_record_id,
                 )
             except requests.RequestException as error:
+                failure = self._classify_failure(error)
+                if failure[0] == "UPLOAD_REJECTED":
+                    # Permanent rejection: quarantine the record so it is not
+                    # retried forever, then continue with the next ones.
+                    self._local_store.mark_rejected(pending_record.local_id)
+                    rejected_any = True
+                    continue
                 self._local_store.delete_records(completed_pending_ids)
                 self._local_store.add_records(new_records)
-                failure = self._classify_failure(error)
                 return UploadBatchReport(
                     uploaded_count=uploaded_count,
                     cached_count=len(self._local_store.list_pending_records()),
@@ -59,6 +66,16 @@ class SyncService:
             uploaded_count += 1
 
         self._local_store.delete_records(completed_pending_ids)
+
+        if rejected_any:
+            # Keep this round's new records cached; they are not rejected.
+            self._local_store.add_records(new_records)
+            return UploadBatchReport(
+                uploaded_count=uploaded_count,
+                cached_count=len(self._local_store.list_pending_records()),
+                failure_code="UPLOAD_REJECTED",
+                failure_message="The WorkLens server rejected one or more uploads (HTTP 4xx).",
+            )
 
         remaining_capacity = max_batch_size - len(pending_batch)
         new_batch = new_records[:remaining_capacity]

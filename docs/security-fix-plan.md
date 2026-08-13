@@ -350,19 +350,25 @@
 
 **证据**：提交见 git log（"Add startup session validation and frontend hardening (M5)"）。
 
-## M6 · 桌面客户端健壮性补强 [ ]
+## M6 · 桌面客户端健壮性补强 [x] 已修复
 
-**位置**：`tray_app.py`（无单实例）、`sync_runtime.py:88-89`（退出 join 10s 强杀）、`activity_tracker.py:53-55` + `collect_activity.py:87`（naive datetime）、`sync_service.py:37-46` + `local_store.py:46-63`（4xx 无限重试/缓存无上限）、`windows_activity.py:42-51`（UWP 归并）、`client_logging.py`（采样日志噪音）、`cache.sqlite3`（入库文件）。
+**位置**：`tray_app.py`、`background_runner.py`、`activity_tracker.py`、`windows_activity.py`、`local_store.py`、`sync_service.py`、`sync_runtime.py`。
 
-**修复方案**：
-1. 单实例互斥：启动时 `win32event.CreateMutexW`，已存在则直接退出并提示；
-2. 退出流程：先停采样，`join()` 无超时等待最终 flush（或独立补传线程），保证内存记录先落缓存；SQLite 开 WAL + `busy_timeout`；
-3. 时间处理：统一 UTC 或带时区时间，时钟回拨时钳制而非静默丢记录；跨午夜记录在 flush 时切分；
-4. 4xx（除 429）标记"需人工介入"停止自动重试并告警；缓存设上限（条数/天数）与 FIFO 淘汰；单轮上传限流；
-5. UWP 前台窗口反查真实包名（`ApplicationFrameHost.exe` 时读窗口标题/UWP API），锁屏记 `Locked` 而非 Unknown；
-6. 采样日志降 DEBUG/节流；删除仓库内 `cache.sqlite3` 并确认 `.gitignore`（已覆盖 `*.sqlite3`）。
+**问题**：无单实例防护（双开重复上报+SQLite 锁冲突）；退出 `join(10s)` 超时强杀丢内存记录；naive datetime 时钟回拨静默丢记录、跨午夜不切分；4xx 无限重试 + 缓存无上限；UWP 归并；采样日志噪音；仓库残留 cache.sqlite3。
 
-**验收标准**：双开测试第二个实例退出；时钟回拨单测不丢记录；断网数周模拟下缓存受上限约束；各条均有对应单测。
+**修复方案（已实施）**：
+1. **单实例互斥**：`acquire_single_instance_mutex()`（命名 mutex），第二实例弹"已在运行"提示后退出；
+2. **退出流程**：`quit_app` 等待最终 flush 放宽到 120s（上传线程有界：单轮 ≤200 条、失败即落缓存），超时才警告退出；`BackgroundRunner.is_alive()` 公开；
+3. **时间处理**：时钟回拨改为钳制（1 秒最小窗口）而非丢弃；`cutoff/finish` 按本地午夜切分跨天记录（各段独立幂等键）；
+4. **4xx 永久拒绝隔离**：SQLite 增加 `rejected` 列；被拒记录标记隔离、不再自动重试；报告含 `UPLOAD_REJECTED`，托盘一次性告警"检查客户端版本/联系管理员"；单轮上传限流（H8 已做）；
+5. **UWP/锁屏**：`ApplicationFrameHost.exe` 用窗口标题作为应用名；锁屏记 `Locked` 而非 Unknown；
+6. **日志节流**：采样日志从每 5 秒一条改为每 5 分钟一条聚合统计；删除仓库残留 `cache.sqlite3`。
+
+**验收标准**：
+- [x] 单测：双开拒绝、回拨钳制、跨午夜切分（独立幂等键）、被拒记录隔离且不再重试、rejected 迁移、锁屏/UWP 归属、4xx 一次性托盘告警；
+- [x] 桌面客户端 58/58 通过。
+
+**证据**：提交见 git log（"Harden desktop client robustness (M6)"）。
 
 ## M7 · 周/月报告幂等缺失 [x] 已修复（随 H2 一起实施）
 

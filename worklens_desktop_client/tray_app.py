@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import threading
 from tkinter import Tk, messagebox, simpledialog
 from urllib.parse import urlparse
@@ -86,9 +87,32 @@ def show_autostart_error(message: str) -> None:
         root.destroy()
 
 
+def show_already_running() -> None:
+    root = Tk()
+    root.withdraw()
+    try:
+        messagebox.showinfo("WorkLens", "WorkLens 已在运行，请查看系统托盘图标。", parent=root)
+    finally:
+        root.destroy()
+
+
+def acquire_single_instance_mutex() -> bool:
+    """Returns False when another WorkLens instance already holds the mutex."""
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW(None, False, "WorkLensDesktopClientSingleInstance")
+        return kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
+    except (AttributeError, OSError):
+        return True
+
+
 def main() -> None:
     args = parse_args()
     logger = create_client_logger()
+    if not acquire_single_instance_mutex():
+        logger.warning("Another WorkLens instance is already running; exiting.")
+        show_already_running()
+        return
     try:
         if args.base_url:
             base_url = args.base_url
@@ -132,16 +156,12 @@ def main() -> None:
         display_name_holder["value"] = login_result.display_name
         refresh_icon()
 
-    def notify_upload_stopped() -> None:
+    def notify_upload_stopped(message: str) -> None:
         status_holder["value"] = "STOPPED"
         refresh_icon()
         icon = icon_holder.get("icon")
         if icon is not None:
-            icon.notify(
-                "登录会话已失效且自动重登失败。采集已暂停，数据仍保存在本机缓存中；"
-                "请在网页端检查账号状态后重启客户端以恢复上传。",
-                "WorkLens",
-            )
+            icon.notify(message, "WorkLens")
 
     runtime = SyncRuntime(
         SyncRuntimeConfig(
@@ -198,7 +218,9 @@ def main() -> None:
     def quit_app(icon: pystray.Icon, item) -> None:
         logger.info("Exit requested from tray menu.")
         runner.request_stop()
-        runner.join(timeout=10)
+        runner.join(timeout=120)
+        if runner.is_alive():
+            logger.warning("Timed out waiting for the final upload flush; exiting anyway.")
         icon.stop()
 
     def autostart_checked(_) -> bool:

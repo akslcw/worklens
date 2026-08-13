@@ -35,6 +35,9 @@ class BackgroundRunner:
         if self._thread is not None:
             self._thread.join(timeout=timeout)
 
+    def is_alive(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
     def wait_until_running(self, timeout: float | None = None) -> bool:
         return self._running_event.wait(timeout=timeout)
 

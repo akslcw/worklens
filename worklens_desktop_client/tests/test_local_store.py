@@ -54,6 +54,24 @@ class LocalRecordStoreTests(unittest.TestCase):
             self.assertEqual(1, len(pending))
             self.assertTrue(pending[0].client_record_id)
             self.assertEqual(32, len(pending[0].client_record_id))
+            self.assertEqual(0, store.rejected_count())
+
+    def test_mark_rejected_quarantines_record_from_retries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LocalRecordStore(str(Path(temp_dir) / "cache.sqlite3"))
+            store.add_records([
+                ActivityRecord(
+                    app_name="chrome.exe",
+                    started_at=datetime.fromisoformat("2026-07-04T14:00:00"),
+                    ended_at=datetime.fromisoformat("2026-07-04T14:05:00"),
+                    client_record_id="client-record-0001",
+                )
+            ])
+            pending = store.list_pending_records()
+            store.mark_rejected(pending[0].local_id)
+
+            self.assertEqual(0, len(store.list_pending_records()))
+            self.assertEqual(1, store.rejected_count())
 
 
 if __name__ == "__main__":

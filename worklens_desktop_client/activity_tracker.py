@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from uuid import uuid4
 
 
@@ -42,7 +42,7 @@ class ActivityTracker:
             if current_record is not None:
                 records.append(current_record)
             self._current_started_at = cutoff_at
-        return records
+        return self._split_at_midnight(records)
 
     def finish(self, finished_at: datetime) -> list[ActivityRecord]:
         records = list(self._completed_records)
@@ -50,13 +50,37 @@ class ActivityTracker:
             current_record = self._build_record(self._current_app_name, self._current_started_at, finished_at)
             if current_record is not None:
                 records.append(current_record)
-        return records
+        return self._split_at_midnight(records)
 
     def _build_record(self, app_name: str, started_at: datetime, ended_at: datetime) -> ActivityRecord | None:
-        if ended_at <= started_at:
+        if ended_at == started_at:
             return None
+        if ended_at < started_at:
+            # System clock rolled backwards: clamp instead of silently
+            # dropping the segment (the backend requires a positive window).
+            started_at = ended_at - timedelta(seconds=1)
         return ActivityRecord(
             app_name=app_name,
             started_at=started_at,
             ended_at=ended_at,
         )
+
+    def _split_at_midnight(self, records: list[ActivityRecord]) -> list[ActivityRecord]:
+        split_records: list[ActivityRecord] = []
+        for record in records:
+            start = record.started_at
+            end = record.ended_at
+            if start.date() == end.date():
+                split_records.append(record)
+                continue
+
+            cursor = start
+            while cursor.date() != end.date():
+                day_end = datetime.combine(cursor.date() + timedelta(days=1), time.min)
+                if day_end <= cursor:
+                    break
+                split_records.append(ActivityRecord(record.app_name, cursor, day_end))
+                cursor = day_end
+            if end > cursor:
+                split_records.append(ActivityRecord(record.app_name, cursor, end))
+        return split_records

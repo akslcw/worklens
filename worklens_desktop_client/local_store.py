@@ -52,6 +52,7 @@ class LocalRecordStore:
                 """
                 SELECT id, app_name, started_at, ended_at, client_record_id
                 FROM pending_usage_records
+                WHERE rejected = 0
                 ORDER BY id ASC
                 """
             ).fetchall()
@@ -65,6 +66,23 @@ class LocalRecordStore:
             )
             for row in rows
         ]
+
+    def mark_rejected(self, local_id: int) -> None:
+        """Quarantines a record the server permanently rejected (4xx), so it
+        is no longer retried automatically."""
+        with closing(sqlite3.connect(self._database_path)) as connection:
+            connection.execute(
+                "UPDATE pending_usage_records SET rejected = 1 WHERE id = ?",
+                (local_id,),
+            )
+            connection.commit()
+
+    def rejected_count(self) -> int:
+        with closing(sqlite3.connect(self._database_path)) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM pending_usage_records WHERE rejected = 1"
+            ).fetchone()
+        return int(row[0])
 
     def delete_records(self, local_ids: list[int]) -> None:
         if not local_ids:
@@ -100,6 +118,11 @@ class LocalRecordStore:
         if "client_record_id" not in columns:
             connection.execute(
                 "ALTER TABLE pending_usage_records ADD COLUMN client_record_id TEXT"
+            )
+            connection.commit()
+        if "rejected" not in columns:
+            connection.execute(
+                "ALTER TABLE pending_usage_records ADD COLUMN rejected INTEGER NOT NULL DEFAULT 0"
             )
             connection.commit()
         connection.execute(

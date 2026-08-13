@@ -226,8 +226,8 @@ class SyncRuntimeTests(unittest.TestCase):
     def test_run_notifies_stop_once_when_relogin_keeps_failing(self) -> None:
         """C2: persistent re-login failure pauses uploads, notifies the tray
         exactly once, and keeps the loop alive (records stay cached)."""
-        stopped_events: list[None] = []
-        runtime = self.make_runtime(on_upload_stopped=lambda: stopped_events.append(None))
+        stopped_events: list[str] = []
+        runtime = self.make_runtime(on_upload_stopped=stopped_events.append)
         sync_service = FakeAlwaysAuthFailingSyncService(None, None)
 
         with patch("worklens_desktop_client.sync_runtime.WorkLensApiClient", FakeFailingReloginApiClient), \
@@ -246,8 +246,8 @@ class SyncRuntimeTests(unittest.TestCase):
 
     def test_run_relogs_in_when_password_change_required(self) -> None:
         """C2: PASSWORD_CHANGE_REQUIRED also triggers a re-login attempt."""
-        stopped_events: list[None] = []
-        runtime = self.make_runtime(on_upload_stopped=lambda: stopped_events.append(None))
+        stopped_events: list[str] = []
+        runtime = self.make_runtime(on_upload_stopped=stopped_events.append)
         sync_service = FakeAlwaysAuthFailingSyncService(None, None, failure_code="PASSWORD_CHANGE_REQUIRED")
 
         with patch("worklens_desktop_client.sync_runtime.WorkLensApiClient", FakeFailingReloginApiClient), \
@@ -263,6 +263,40 @@ class SyncRuntimeTests(unittest.TestCase):
             )
 
         self.assertEqual(1, len(stopped_events))
+
+    def test_run_notifies_once_when_uploads_are_permanently_rejected(self) -> None:
+        """M6: a permanent 4xx rejection notifies the tray once instead of
+        retrying silently forever."""
+        stopped_events: list[str] = []
+        runtime = self.make_runtime(on_upload_stopped=stopped_events.append)
+
+        class RejectedSyncService:
+            def __init__(self, client, store) -> None:
+                self.client = client
+                self.store = store
+
+            def upload_batch(self, token, records):
+                return SimpleNamespace(
+                    uploaded_count=0,
+                    cached_count=0,
+                    failure_code="UPLOAD_REJECTED",
+                    failure_message="The WorkLens server rejected the upload (HTTP 400).",
+                )
+
+        with patch("worklens_desktop_client.sync_runtime.WorkLensApiClient", FakeApiClient), \
+                patch("worklens_desktop_client.sync_runtime.SyncService", RejectedSyncService), \
+                patch("worklens_desktop_client.sync_runtime.ActivityTracker", FakeActivityTracker), \
+                patch("worklens_desktop_client.sync_runtime.Win32ActivityProbe", FakeActivityProbe), \
+                patch("worklens_desktop_client.sync_runtime.LocalRecordStore", lambda cache_db: object()):
+            runtime.run(
+                username="employee.alice",
+                password="Password123!",
+                stop_event=threading.Event(),
+                duration_seconds=3,
+            )
+
+        self.assertEqual(1, len(stopped_events))
+        self.assertIn("服务器拒绝", stopped_events[0])
 
     def test_sampling_continues_while_upload_is_blocked(self) -> None:
         """H8: uploads run on a separate thread, so slow HTTP does not stop

@@ -42,10 +42,17 @@ class Win32ActivityProbe:
     def get_foreground_process_name(self) -> str:
         foreground_window = win32gui.GetForegroundWindow()
         if foreground_window == 0:
-            return "Unknown"
+            return "Locked"
 
+        title = win32gui.GetWindowText(foreground_window)
         _, process_id = win32process.GetWindowThreadProcessId(foreground_window)
         try:
-            return psutil.Process(process_id).name()
+            name = psutil.Process(process_id).name()
         except (psutil.Error, OSError):
             return f"pid-{process_id}"
+
+        # UWP apps all report ApplicationFrameHost.exe; use the window title as
+        # the stable app identity instead of lumping them together.
+        if name.lower() == "applicationframehost.exe" and title.strip():
+            return title.strip()
+        return name

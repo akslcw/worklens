@@ -75,6 +75,33 @@ class ActivityTrackerTests(unittest.TestCase):
 
         self.assertEqual([], records)
 
+    def test_clock_rollback_clamps_instead_of_dropping_record(self) -> None:
+        tracker = ActivityTracker()
+
+        tracker.observe("chrome.exe", datetime.fromisoformat("2026-07-04T13:05:00"))
+        tracker.observe("slack.exe", datetime.fromisoformat("2026-07-04T13:04:00"))
+        records = tracker.finish(datetime.fromisoformat("2026-07-04T13:04:05"))
+
+        self.assertEqual(2, len(records))
+        self.assertEqual("chrome.exe", records[0].app_name)
+        self.assertLess(records[0].started_at, records[0].ended_at)
+        self.assertEqual("slack.exe", records[1].app_name)
+
+    def test_cutoff_splits_record_crossing_midnight(self) -> None:
+        tracker = ActivityTracker()
+
+        tracker.observe("chrome.exe", datetime.fromisoformat("2026-07-04T23:55:00"))
+        records = tracker.cutoff(datetime.fromisoformat("2026-07-05T00:10:00"))
+
+        self.assertEqual(2, len(records))
+        self.assertEqual("chrome.exe", records[0].app_name)
+        self.assertEqual(datetime.fromisoformat("2026-07-04T23:55:00"), records[0].started_at)
+        self.assertEqual(datetime.fromisoformat("2026-07-05T00:00:00"), records[0].ended_at)
+        self.assertEqual("chrome.exe", records[1].app_name)
+        self.assertEqual(datetime.fromisoformat("2026-07-05T00:00:00"), records[1].started_at)
+        self.assertEqual(datetime.fromisoformat("2026-07-05T00:10:00"), records[1].ended_at)
+        self.assertNotEqual(records[0].client_record_id, records[1].client_record_id)
+
 
 if __name__ == "__main__":
     unittest.main()

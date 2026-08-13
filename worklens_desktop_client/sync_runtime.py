@@ -70,6 +70,7 @@ class SyncRuntime:
             "backoff_seconds": 60.0,
             "stopped_notified": False,
         }
+        rejected_state = {"notified": False}
 
         def reauthenticate() -> bool:
             now = time.time()
@@ -88,13 +89,33 @@ class SyncRuntime:
                 if not relogin_state["stopped_notified"]:
                     relogin_state["stopped_notified"] = True
                     if self._on_upload_stopped is not None:
-                        self._on_upload_stopped()
+                        self._on_upload_stopped(
+                            "登录会话已失效且自动重登失败。采集已暂停，数据仍保存在本机缓存中；"
+                            "请在网页端检查账号状态后重启客户端以恢复上传。"
+                        )
                 return False
             relogin_state["backoff_seconds"] = 60.0
             login_result_holder[0] = refreshed
             self._on_login(refreshed)
             self._logger(f"Session refreshed for {refreshed.username}. Uploads resume.")
             return True
+
+        def process_report(report) -> None:
+            self._log_upload_failure(report)
+            if report.failure_code in self.AUTH_FAILURE_CODES:
+                reauthenticate()
+            elif report.failure_code == "UPLOAD_REJECTED":
+                self._logger(
+                    "ERROR: the server permanently rejected uploaded records (HTTP 4xx). "
+                    "Rejected records are quarantined locally; please check the client version and server logs."
+                )
+                if not rejected_state["notified"]:
+                    rejected_state["notified"] = True
+                    if self._on_upload_stopped is not None:
+                        self._on_upload_stopped(
+                            "部分采集数据被服务器拒绝（HTTP 4xx），已隔离在本机缓存中。"
+                            "请检查客户端版本或联系管理员。"
+                        )
 
         def queue_records(records: list[ActivityRecord]) -> None:
             if not records:
@@ -119,25 +140,21 @@ class SyncRuntime:
                     pass
                 if time.time() >= next_upload_at:
                     next_upload_at += self._config.upload_interval_seconds
-                    report = self._upload(sync_service, login_result_holder[0].token, pending)
+                    process_report(self._upload(sync_service, login_result_holder[0].token, pending))
                     pending = []
-                    if report is not None and report.failure_code in self.AUTH_FAILURE_CODES:
-                        reauthenticate()
             while True:
                 try:
                     pending.append(upload_queue.get_nowait())
                 except queue.Empty:
                     break
             if pending:
-                self._upload(sync_service, login_result_holder[0].token, pending)
+                process_report(self._upload(sync_service, login_result_holder[0].token, pending))
 
         startup_report = sync_service.upload_batch(login_result_holder[0].token, [])
         self._logger(
             f"Startup retry complete: uploaded={startup_report.uploaded_count}, cached={startup_report.cached_count}"
         )
-        self._log_upload_failure(startup_report)
-        if startup_report.failure_code in self.AUTH_FAILURE_CODES:
-            reauthenticate()
+        process_report(startup_report)
 
         self._logger(
             "Running sync client. "
@@ -151,11 +168,19 @@ class SyncRuntime:
 
         started_at = time.time()
         next_flush_at = time.time() + self._config.upload_interval_seconds
+        next_sample_log_at = time.time() + 300.0
+        sample_log_count = 0
         while not stop_event.is_set():
             observed_at = datetime.now().replace(microsecond=0)
             app_name = probe.sample_app_name()
             tracker.observe(app_name, observed_at)
-            self._logger(f"[{observed_at.isoformat(timespec='seconds')}] sampled {app_name}")
+            sample_log_count += 1
+            if time.time() >= next_sample_log_at:
+                self._logger(
+                    f"Sampling active: {sample_log_count} samples since last log (current app {app_name})."
+                )
+                sample_log_count = 0
+                next_sample_log_at = time.time() + 300.0
 
             if time.time() >= next_flush_at:
                 next_flush_at = time.time() + self._config.upload_interval_seconds
@@ -176,7 +201,6 @@ class SyncRuntime:
         self._logger(
             f"flush complete: uploaded={report.uploaded_count}, cached={report.cached_count}"
         )
-        self._log_upload_failure(report)
         return report
 
     def _log_upload_failure(self, report) -> None:
@@ -201,8 +225,8 @@ class SyncRuntime:
             self._logger("Upload paused: the WorkLens server is temporarily unavailable. Records remain cached locally.")
         elif failure_code == "UPLOAD_REJECTED":
             self._logger(
-                "Upload rejected by the server: %s. Records remain cached locally and will retry.",
-                report.failure_message or "unknown reason",
+                f"Upload rejected by the server: {report.failure_message or 'unknown reason'}. "
+                f"Records remain cached locally and will retry."
             )
 
     @staticmethod

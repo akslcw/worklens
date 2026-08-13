@@ -54,6 +54,25 @@ class PasswordChangeRequiredApiClient:
         raise requests.HTTPError("403 Client Error: Forbidden", response=response)
 
 
+class RejectingApiClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, datetime, datetime, str | None]] = []
+
+    def create_usage_record(
+        self,
+        token: str,
+        app_name: str,
+        started_at: datetime,
+        ended_at: datetime,
+        client_record_id: str | None = None,
+    ) -> dict:
+        self.calls.append((token, app_name, started_at, ended_at, client_record_id))
+        response = requests.Response()
+        response.status_code = 400
+        response._content = b'{"message":"bad request"}'
+        raise requests.HTTPError("400 Client Error: Bad Request", response=response)
+
+
 class SyncServiceTests(unittest.TestCase):
 
     def test_failure_classification_reports_common_network_and_http_errors(self) -> None:
@@ -212,6 +231,30 @@ class SyncServiceTests(unittest.TestCase):
             pending_records = store.list_pending_records()
             self.assertEqual(1, len(pending_records))
             self.assertEqual("chrome.exe", pending_records[0].app_name)
+    def test_permanent_rejection_quarantines_record_and_stops_retrying(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LocalRecordStore(str(Path(temp_dir) / "cache.sqlite3"))
+            store.add_records([
+                ActivityRecord(
+                    app_name="bad-app.exe",
+                    started_at=datetime.fromisoformat("2026-07-04T14:00:00"),
+                    ended_at=datetime.fromisoformat("2026-07-04T14:05:00"),
+                    client_record_id="client-record-rejected",
+                )
+            ])
+            service = SyncService(RejectingApiClient(), store)
+
+            report = service.upload_batch("token-1", [])
+
+            self.assertEqual(0, report.uploaded_count)
+            self.assertEqual("UPLOAD_REJECTED", report.failure_code)
+            self.assertEqual(1, store.rejected_count())
+            self.assertEqual(0, len(store.list_pending_records()))
+
+            retry_report = service.upload_batch("token-1", [])
+            self.assertEqual(0, retry_report.uploaded_count)
+            self.assertEqual(1, store.rejected_count())
+
     def test_upload_batch_caps_pending_records_per_call(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = LocalRecordStore(str(Path(temp_dir) / "cache.sqlite3"))
