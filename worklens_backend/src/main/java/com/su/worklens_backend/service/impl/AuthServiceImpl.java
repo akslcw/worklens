@@ -190,6 +190,7 @@ public class AuthServiceImpl implements AuthService {
         if (!passwordHasher.matches(changePasswordRequest.getCurrentPassword(), authUser.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid current password");
         }
+        validateNewPassword(changePasswordRequest.getNewPassword(), changePasswordRequest.getCurrentPassword());
 
         authUser.setPasswordHash(passwordHasher.hash(changePasswordRequest.getNewPassword()));
         authUser.setMustChangePassword(false);
@@ -198,6 +199,27 @@ public class AuthServiceImpl implements AuthService {
                 new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getUserId, authUser.getId())
         );
         return new PasswordChangeResponse(authUser.getUsername(), false);
+    }
+
+    /**
+     * Server-side password policy: at least 8 characters with upper case,
+     * lower case, digit and symbol, and different from the current password.
+     */
+    private void validateNewPassword(String newPassword, String currentPassword) {
+        if (newPassword == null
+                || newPassword.length() < 8
+                || !newPassword.matches(".*[a-z].*")
+                || !newPassword.matches(".*[A-Z].*")
+                || !newPassword.matches(".*\\d.*")
+                || !newPassword.matches(".*[^A-Za-z0-9].*")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "New password must be at least 8 characters and include uppercase, lowercase, digit and symbol"
+            );
+        }
+        if (newPassword.equals(currentPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be different from the current password");
+        }
     }
 
     @Override

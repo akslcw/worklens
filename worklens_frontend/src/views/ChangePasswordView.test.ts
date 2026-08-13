@@ -44,6 +44,7 @@ describe('ChangePasswordView', () => {
 
     await wrapper.get('[data-test="current-password-input"]').setValue('worklens123')
     await wrapper.get('[data-test="new-password-input"]').setValue('Changed123!')
+    await wrapper.get('[data-test="confirm-password-input"]').setValue('Changed123!')
     await wrapper.get('[data-test="change-password-form"]').trigger('submit')
     await flushPromises()
 
@@ -56,6 +57,28 @@ describe('ChangePasswordView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/login')
+  })
+
+  it.each([
+    ['same as current password', 'worklens123', 'worklens123', 'worklens123', '新密码不能与当前密码相同。'],
+    ['too weak', 'worklens123', 'weakpass', 'weakpass', '至少 8 位'],
+    ['missing symbol', 'worklens123', 'Changed1234', 'Changed1234', '至少 8 位'],
+    ['confirm mismatch', 'worklens123', 'Changed123!', 'Changed456!', '两次输入的新密码不一致。'],
+  ])('rejects %s without calling the API', async (_label, currentPassword, newPassword, confirmPassword, expectedMessage) => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { wrapper } = await mountChangePassword()
+
+    await wrapper.get('[data-test="current-password-input"]').setValue(currentPassword)
+    await wrapper.get('[data-test="new-password-input"]').setValue(newPassword)
+    await wrapper.get('[data-test="confirm-password-input"]').setValue(confirmPassword)
+    await wrapper.get('[data-test="change-password-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain(expectedMessage)
+    expect(wrapper.find('[data-test="change-password-success"]').exists()).toBe(false)
   })
 })
 

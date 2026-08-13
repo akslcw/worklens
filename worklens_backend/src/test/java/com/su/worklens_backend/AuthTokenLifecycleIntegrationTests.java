@@ -75,6 +75,34 @@ class AuthTokenLifecycleIntegrationTests extends PostgresIntegrationTestSupport 
     }
 
     @Test
+    void changePasswordRejectsWeakNewPassword() throws Exception {
+        insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+        String token = loginAndReadToken("employee.alice", PASSWORD);
+
+        mockMvc.perform(post("/auth/change-password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "Password123!",
+                                  "newPassword": "weakpass"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/auth/change-password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "Password123!",
+                                  "newPassword": "Password123!"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void logoutRevokesThePresentedToken() throws Exception {
         insertUser("manager", "MANAGER", "M001", "Manager User");
         String token = loginAndReadToken("manager", PASSWORD);

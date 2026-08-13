@@ -252,20 +252,23 @@
 
 **证据**：提交见 git log（"Split sampling and upload threads, surface collection errors (H8)"）。
 
-## H9 · 强制改密页校验缺失 [ ]
+## H9 · 强制改密页校验缺失 [x] 已修复
 
-**位置**：`worklens_frontend/src/views/ChangePasswordView.vue:10-50`。
+**位置**：后端 `AuthServiceImpl.changePassword`；前端 `ChangePasswordView.vue`。
 
 **问题**：不校验新旧密码不同、无确认字段、无强度要求；用户可"改"成原密码或极弱密码；无确认框手误即锁死账号。
 
-**修复方案**：
-1. 前端校验：`newPassword !== currentPassword`、最小 8 位且含大小写字母+数字+符号（与后端临时密码策略对齐）、确认字段一致才可提交；
-2. 后端 `changePassword` 增加同样强度校验（服务端为准，返回 400）；
-3. 改密成功后清空输入。
+**修复方案（已实施）**：
+1. 前端校验：新旧密码必须不同、至少 8 位且含大小写字母+数字+符号、确认字段一致才提交，并给出具体错误文案；
+2. 后端 `changePassword` 增加同样的服务端强校验（400），服务端为准；
+3. 改密成功后清空全部输入。
 
 **验收标准**：
-- 前端单测：新旧相同/过弱/两次不一致均禁止提交并提示；
-- 后端集成测试：弱新密码返回 400；合法新密码成功。
+- [x] 前端单测：新旧相同/过弱/缺符号/两次不一致四类均阻止提交且不调用 API；
+- [x] 后端集成测试：弱密码与新旧相同均 400；
+- [x] 全量后端 123/123、前端 39/39、生产构建通过。
+
+**证据**：提交见 git log（"Enforce password strength on change-password (H9)"）。
 
 ---
 

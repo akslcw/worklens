@@ -10,14 +10,40 @@ const session = readStoredSession()
 const form = reactive({
   currentPassword: '',
   newPassword: '',
+  confirmPassword: '',
 })
 
 const submitting = ref(false)
 const errorMessage = ref('')
 const passwordChanged = ref(false)
 
+function validateForm() {
+  if (form.newPassword === form.currentPassword) {
+    return '新密码不能与当前密码相同。'
+  }
+  if (
+    form.newPassword.length < 8 ||
+    !/[a-z]/.test(form.newPassword) ||
+    !/[A-Z]/.test(form.newPassword) ||
+    !/\d/.test(form.newPassword) ||
+    !/[^A-Za-z0-9]/.test(form.newPassword)
+  ) {
+    return '新密码至少 8 位，且需同时包含大写字母、小写字母、数字和符号。'
+  }
+  if (form.newPassword !== form.confirmPassword) {
+    return '两次输入的新密码不一致。'
+  }
+  return null
+}
+
 async function handleChangePassword() {
   if (!session?.token || submitting.value) {
+    return
+  }
+
+  const validationError = validateForm()
+  if (validationError) {
+    errorMessage.value = validationError
     return
   }
 
@@ -38,6 +64,7 @@ async function handleChangePassword() {
     passwordChanged.value = true
     form.currentPassword = ''
     form.newPassword = ''
+    form.confirmPassword = ''
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '密码修改失败，请稍后重试。'
   } finally {
@@ -94,6 +121,17 @@ async function handleLogout() {
           <input
             data-test="new-password-input"
             v-model="form.newPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+        </label>
+
+        <label class="field">
+          <span>确认新密码</span>
+          <input
+            data-test="confirm-password-input"
+            v-model="form.confirmPassword"
             type="password"
             autocomplete="new-password"
             required
