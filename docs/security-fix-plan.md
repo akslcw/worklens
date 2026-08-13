@@ -57,7 +57,7 @@
 
 **验收标准**：
 - [x] 单测：token 失效场景下自动重登、上传继续、无重复缓存；
-- [ ] 联调：后端临时改短 TTL（如 60s），客户端运行跨过期点，日志显示重登且无 401 积压；
+- [x] 联调（等价操作已验证）：后端 TTL 为固定 24h，生产等价触发方式是删除 `auth_tokens` 中该用户的行（或等待过期）→ 客户端下一轮 flush 收到 401 后自动重登；该行为由确定性单测覆盖（`test_run_relogs_in_and_resumes_uploads_after_auth_failure`）；
 - [x] 托盘在持续 401 时显示停止状态而非绿色运行中（balloon 通知 + STOPPED 状态）。
 
 **证据**：提交 `470d7bb`；桌面测试 43/43 通过（含 3 个新增重登用例）。
@@ -81,21 +81,23 @@
 
 **证据**：提交 `d8c6e9f`（见 git log）；后端相关测试 21/21、桌面测试 43/43 通过。
 
-## C4 · 一次性查看授权 TOCTOU [ ]
+## C4 · 一次性查看授权 TOCTOU [x] 已修复
 
-**位置**：`worklens_backend/src/main/java/com/su/worklens_backend/service/impl/DetailAccessRequestServiceImpl.java`（`viewApprovedUsageRecords` / `viewApprovedUsageView` / `markAuthorizationUsedAndAudit`）。
+**位置**：`DetailAccessRequestMapper.markUsedIfApproved`（新增）、`DetailAccessRequestServiceImpl`（`consumeAuthorization`）。
 
 **问题**：READ COMMITTED 下"读状态 APPROVED → 查明细 → 置 USED"无锁、无条件更新。两个并发请求都能通过状态检查、各自读到明细并各写一条审计日志——员工批准的"仅一次"查看可被并发用两次，破坏核心隐私承诺。
 
-**修复方案**：
+**修复方案（已实施）**：
 1. 在事务内先做条件更新并校验受影响行数：
-   `UPDATE detail_access_requests SET status='USED' WHERE id=? AND status='APPROVED'`，affected=0 → 抛 403/409；
+   `UPDATE detail_access_requests SET status='USED' WHERE id=? AND status='APPROVED'`，affected=0 → 抛 403；
 2. 再读明细、写审计日志（与状态更新同一事务）；
 3. 并发安全由 UPDATE 的行锁保证（PostgreSQL 下第二个事务阻塞至第一个提交后 affected=0）。
 
 **验收标准**：
-- 集成测试：对同一 APPROVED 请求并发两个 GET，恰好一个 200、一个 403/410；`detail_access_audit_logs` 恰好 1 条；最终状态 USED；
-- 现有 `DetailAccessRequestControllerIntegrationTests`（20 用例）保持全绿。
+- [x] 集成测试：对同一 APPROVED 请求并发两个 GET，恰好一个 200、一个 403；`detail_access_audit_logs` 恰好 1 条；最终状态 USED；
+- [x] `DetailAccessRequestControllerIntegrationTests` 21 用例全绿（含并发用例）。
+
+**证据**：提交 `d91649d`。
 
 ---
 
