@@ -33,6 +33,7 @@ class SyncService:
                     app_name=pending_record.app_name,
                     started_at=pending_record.started_at,
                     ended_at=pending_record.ended_at,
+                    client_record_id=pending_record.client_record_id,
                 )
             except requests.RequestException as error:
                 self._local_store.delete_records(completed_pending_ids)
@@ -56,6 +57,7 @@ class SyncService:
                     app_name=record.app_name,
                     started_at=record.started_at,
                     ended_at=record.ended_at,
+                    client_record_id=record.client_record_id,
                 )
             except requests.RequestException as error:
                 self._local_store.add_records(new_records[index:])

@@ -75,17 +75,27 @@ class WorkLensApiClient:
             must_change_password=bool(payload.get("mustChangePassword", False)),
         )
 
-    def create_usage_record(self, token: str, app_name: str, started_at: datetime, ended_at: datetime) -> dict[str, Any]:
+    def create_usage_record(
+        self,
+        token: str,
+        app_name: str,
+        started_at: datetime,
+        ended_at: datetime,
+        client_record_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "appName": app_name,
+            "startedAt": started_at.isoformat(timespec="seconds"),
+            "endedAt": ended_at.isoformat(timespec="seconds"),
+        }
+        if client_record_id:
+            payload["clientRecordId"] = client_record_id
         response = self._session.post(
             f"{self._base_url}/usage-records",
             headers={
                 "Authorization": f"Bearer {token}",
             },
-            json={
-                "appName": app_name,
-                "startedAt": started_at.isoformat(timespec="seconds"),
-                "endedAt": ended_at.isoformat(timespec="seconds"),
-            },
+            json=payload,
             timeout=10,
         )
         response.raise_for_status()

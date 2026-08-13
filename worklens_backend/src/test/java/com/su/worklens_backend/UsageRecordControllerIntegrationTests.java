@@ -164,6 +164,88 @@ class UsageRecordControllerIntegrationTests extends PostgresIntegrationTestSuppo
     }
 
     @Test
+    void sameClientRecordIdIsIdempotentAcrossRetries() throws Exception {
+        long employeeId = insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
+        String employeeToken = loginAndReadToken("employee.alice", PASSWORD);
+
+        MvcResult first = mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2026-07-03T09:00:00",
+                                  "endedAt": "2026-07-03T09:30:00",
+                                  "clientRecordId": "client-record-0001"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        MvcResult retry = mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2026-07-03T09:00:00",
+                                  "endedAt": "2026-07-03T09:30:00",
+                                  "clientRecordId": "client-record-0001"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        assertThat(readId(retry)).isEqualTo(readId(first));
+
+        Integer recordCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM usage_records WHERE employee_id = ?",
+                Integer.class,
+                employeeId
+        );
+        assertThat(recordCount).isEqualTo(1);
+    }
+
+    @Test
+    void distinctClientRecordIdsCreateDistinctRecords() throws Exception {
+        long employeeId = insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
+        String employeeToken = loginAndReadToken("employee.alice", PASSWORD);
+
+        mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Slack",
+                                  "startedAt": "2026-07-03T09:00:00",
+                                  "endedAt": "2026-07-03T09:30:00",
+                                  "clientRecordId": "client-record-0001"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/usage-records")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "appName": "Chrome",
+                                  "startedAt": "2026-07-03T10:00:00",
+                                  "endedAt": "2026-07-03T10:30:00",
+                                  "clientRecordId": "client-record-0002"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Integer recordCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM usage_records WHERE employee_id = ?",
+                Integer.class,
+                employeeId
+        );
+        assertThat(recordCount).isEqualTo(2);
+    }
+
+    @Test
     void listUsageRecordsRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/usage-records"))
                 .andExpect(status().isUnauthorized());

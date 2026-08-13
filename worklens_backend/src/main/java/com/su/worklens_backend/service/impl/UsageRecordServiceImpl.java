@@ -18,6 +18,7 @@ import com.su.worklens_backend.entity.UsageRecord;
 import com.su.worklens_backend.mapper.UsageRecordMapper;
 import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.UsageRecordService;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -108,6 +109,14 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     @Override
     public UsageRecordResponse createUsageRecord(UsageRecordRequest request, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, EMPLOYEE_ROLE);
+        String clientRecordId = normalizeClientRecordId(request.getClientRecordId());
+        if (clientRecordId != null) {
+            UsageRecord existing = findByIdempotencyKey(authenticatedUser.getEmployeeId(), clientRecordId);
+            if (existing != null) {
+                return toUsageRecordResponse(existing);
+            }
+        }
+
         UsageRecord latestRecord = usageRecordMapper.selectOne(
                 new LambdaQueryWrapper<UsageRecord>()
                         .eq(UsageRecord::getEmployeeId, authenticatedUser.getEmployeeId())
@@ -115,8 +124,16 @@ public class UsageRecordServiceImpl implements UsageRecordService {
                         .last("LIMIT 1")
         );
         if (canMergeIntoLatestRecord(latestRecord, request)) {
+            boolean changed = false;
             if (request.getEndedAt().isAfter(latestRecord.getEndedAt())) {
                 latestRecord.setEndedAt(request.getEndedAt());
+                changed = true;
+            }
+            if (clientRecordId != null && !clientRecordId.equals(latestRecord.getClientRecordId())) {
+                latestRecord.setClientRecordId(clientRecordId);
+                changed = true;
+            }
+            if (changed) {
                 usageRecordMapper.updateById(latestRecord);
             }
             return toUsageRecordResponse(latestRecord);
@@ -128,9 +145,37 @@ public class UsageRecordServiceImpl implements UsageRecordService {
         usageRecord.setStartedAt(request.getStartedAt());
         usageRecord.setEndedAt(request.getEndedAt());
         usageRecord.setCreatedAt(LocalDateTime.now());
-        usageRecordMapper.insert(usageRecord);
+        usageRecord.setClientRecordId(clientRecordId);
+        try {
+            usageRecordMapper.insert(usageRecord);
+        } catch (DuplicateKeyException exception) {
+            UsageRecord existing = findByIdempotencyKey(authenticatedUser.getEmployeeId(), clientRecordId);
+            if (existing != null) {
+                return toUsageRecordResponse(existing);
+            }
+            throw exception;
+        }
 
         return toUsageRecordResponse(usageRecord);
+    }
+
+    private UsageRecord findByIdempotencyKey(Long employeeId, String clientRecordId) {
+        if (clientRecordId == null) {
+            return null;
+        }
+        return usageRecordMapper.selectOne(
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getEmployeeId, employeeId)
+                        .eq(UsageRecord::getClientRecordId, clientRecordId)
+                        .last("LIMIT 1")
+        );
+    }
+
+    private String normalizeClientRecordId(String clientRecordId) {
+        if (clientRecordId == null || clientRecordId.isBlank()) {
+            return null;
+        }
+        return clientRecordId.trim();
     }
 
     @Override

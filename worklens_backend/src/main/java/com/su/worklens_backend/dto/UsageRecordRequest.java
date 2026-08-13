@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
@@ -17,6 +18,9 @@ public class UsageRecordRequest {
 
     @NotNull(message = "endedAt must not be null")
     private LocalDateTime endedAt;
+
+    @Size(max = 64, message = "clientRecordId must not exceed 64 characters")
+    private String clientRecordId;
 
     public String getAppName() {
         return appName;
@@ -40,6 +44,14 @@ public class UsageRecordRequest {
 
     public void setEndedAt(LocalDateTime endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public String getClientRecordId() {
+        return clientRecordId;
+    }
+
+    public void setClientRecordId(String clientRecordId) {
+        this.clientRecordId = clientRecordId;
     }
 
     @JsonIgnore

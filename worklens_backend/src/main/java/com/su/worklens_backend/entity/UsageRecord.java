@@ -28,6 +28,9 @@ public class UsageRecord {
     @TableField("created_at")
     private LocalDateTime createdAt;
 
+    @TableField("client_record_id")
+    private String clientRecordId;
+
     public Long getId() {
         return id;
     }
@@ -74,5 +77,13 @@ public class UsageRecord {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getClientRecordId() {
+        return clientRecordId;
+    }
+
+    public void setClientRecordId(String clientRecordId) {
+        this.clientRecordId = clientRecordId;
     }
 }

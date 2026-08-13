@@ -99,6 +99,13 @@ ALTER TABLE usage_records
     ADD CONSTRAINT usage_records_employee_id_fkey
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE;
 
+ALTER TABLE usage_records
+    ADD COLUMN IF NOT EXISTS client_record_id VARCHAR(64);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_usage_records_employee_client_record
+    ON usage_records (employee_id, client_record_id)
+    WHERE client_record_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS llm_reports (
     id BIGSERIAL PRIMARY KEY,
     report_type VARCHAR(50) NOT NULL,

@@ -5,6 +5,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from worklens_desktop_client.activity_tracker import ActivityRecord
 
@@ -15,6 +16,7 @@ class PendingRecord:
     app_name: str
     started_at: datetime
     ended_at: datetime
+    client_record_id: str
 
 
 class LocalRecordStore:
@@ -29,14 +31,15 @@ class LocalRecordStore:
         with closing(sqlite3.connect(self._database_path)) as connection:
             connection.executemany(
                 """
-                INSERT INTO pending_usage_records (app_name, started_at, ended_at)
-                VALUES (?, ?, ?)
+                INSERT INTO pending_usage_records (app_name, started_at, ended_at, client_record_id)
+                VALUES (?, ?, ?, ?)
                 """,
                 [
                     (
                         record.app_name,
                         record.started_at.isoformat(timespec="seconds"),
                         record.ended_at.isoformat(timespec="seconds"),
+                        record.client_record_id,
                     )
                     for record in records
                 ],
@@ -47,7 +50,7 @@ class LocalRecordStore:
         with closing(sqlite3.connect(self._database_path)) as connection:
             rows = connection.execute(
                 """
-                SELECT id, app_name, started_at, ended_at
+                SELECT id, app_name, started_at, ended_at, client_record_id
                 FROM pending_usage_records
                 ORDER BY id ASC
                 """
@@ -58,6 +61,7 @@ class LocalRecordStore:
                 app_name=row[1],
                 started_at=datetime.fromisoformat(row[2]),
                 ended_at=datetime.fromisoformat(row[3]),
+                client_record_id=row[4] or uuid4().hex,
             )
             for row in rows
         ]
@@ -86,3 +90,20 @@ class LocalRecordStore:
                 """
             )
             connection.commit()
+            self._migrate_to_client_record_id(connection)
+
+    def _migrate_to_client_record_id(self, connection: sqlite3.Connection) -> None:
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(pending_usage_records)").fetchall()
+        }
+        if "client_record_id" not in columns:
+            connection.execute(
+                "ALTER TABLE pending_usage_records ADD COLUMN client_record_id TEXT"
+            )
+            connection.commit()
+        connection.execute(
+            "UPDATE pending_usage_records SET client_record_id = lower(hex(randomblob(16))) "
+            "WHERE client_record_id IS NULL OR client_record_id = ''"
+        )
+        connection.commit()

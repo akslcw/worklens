@@ -165,6 +165,43 @@ class WorkLensApiClientTests(unittest.TestCase):
         )
         response.raise_for_status.assert_called_once()
 
+    def test_create_usage_record_includes_client_record_id_when_provided(self) -> None:
+        session = Mock()
+        response = Mock()
+        response.json.return_value = {
+            "id": 8,
+            "appName": "Manual Test App",
+            "startedAt": "2026-07-04T12:00:00",
+            "endedAt": "2026-07-04T12:05:00",
+            "createdAt": "2026-07-04T12:05:01",
+        }
+        session.post.return_value = response
+        client = WorkLensApiClient("http://localhost:8080", session=session)
+        started_at = datetime.fromisoformat("2026-07-04T12:00:00")
+        ended_at = datetime.fromisoformat("2026-07-04T12:05:00")
+
+        client.create_usage_record(
+            token="abc123",
+            app_name="Manual Test App",
+            started_at=started_at,
+            ended_at=ended_at,
+            client_record_id="client-record-0001",
+        )
+
+        session.post.assert_called_once_with(
+            "http://localhost:8080/usage-records",
+            headers={
+                "Authorization": "Bearer abc123",
+            },
+            json={
+                "appName": "Manual Test App",
+                "startedAt": "2026-07-04T12:00:00",
+                "endedAt": "2026-07-04T12:05:00",
+                "clientRecordId": "client-record-0001",
+            },
+            timeout=10,
+        )
+
     @staticmethod
     def _json_response(status_code: int, payload: dict) -> requests.Response:
         import json
