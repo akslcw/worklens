@@ -55,6 +55,7 @@ class DetailAccessRequestControllerIntegrationTests extends PostgresIntegrationT
         truncateIfExists("TRUNCATE TABLE detail_access_audit_logs RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE detail_access_requests RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_tokens RESTART IDENTITY CASCADE");
+        truncateIfExists("TRUNCATE TABLE auth_login_attempts RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_users RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE employees RESTART IDENTITY CASCADE");
     }

@@ -44,6 +44,7 @@ class AuthTokenLifecycleIntegrationTests extends PostgresIntegrationTestSupport 
         truncateIfExists("TRUNCATE TABLE detail_access_audit_logs RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE detail_access_requests RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_tokens RESTART IDENTITY CASCADE");
+        truncateIfExists("TRUNCATE TABLE auth_login_attempts RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_users RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE employees RESTART IDENTITY CASCADE");
     }
@@ -99,6 +100,30 @@ class AuthTokenLifecycleIntegrationTests extends PostgresIntegrationTestSupport 
                                   "newPassword": "Password123!"
                                 }
                                 """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void accountLockoutReturns429AfterFiveFailedLogins() throws Exception {
+        insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            login("employee.alice", "WrongPassword1!")
+                    .andExpect(status().isUnauthorized());
+        }
+
+        login("employee.alice", "WrongPassword1!")
+                .andExpect(status().isTooManyRequests());
+
+        login("employee.alice", PASSWORD)
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void oversizedLoginPasswordReturnsBadRequest() throws Exception {
+        insertUser("employee.alice", "EMPLOYEE", "E001", "Alice");
+
+        login("employee.alice", "A".repeat(65))
                 .andExpect(status().isBadRequest());
     }
 

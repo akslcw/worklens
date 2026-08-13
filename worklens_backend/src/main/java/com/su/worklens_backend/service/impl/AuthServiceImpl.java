@@ -18,6 +18,8 @@ import com.su.worklens_backend.mapper.EmployeeMapper;
 import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.PasswordHasher;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,10 +32,14 @@ import java.util.UUID;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthServiceImpl.class);
+
     public static final String CURRENT_USER_ATTRIBUTE = "currentUser";
     private static final int TOKEN_TTL_HOURS = 24;
     private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
     private static final int LOGIN_LOCK_MINUTES = 15;
+    private static final String DUMMY_PASSWORD_HASH =
+            "pbkdf2_sha256$120000$d29ya2xlbnMtc2FsdC0wMQ==$y7dDc5YjVRKR+v1GlPwEumSMa6Wa4bMH0h23Tk8Tx64=";
 
     private final AuthUserMapper authUserMapper;
     private final AuthLoginAttemptMapper authLoginAttemptMapper;
@@ -83,13 +89,25 @@ public class AuthServiceImpl implements AuthService {
                 new LambdaQueryWrapper<AuthUser>().eq(AuthUser::getUsername, username)
         );
 
-        if (authUser == null || !passwordHasher.matches(request.getPassword(), authUser.getPasswordHash())) {
+        boolean passwordMatches;
+        if (authUser == null) {
+            // Verify against a dummy hash so unknown usernames cost the same
+            // PBKDF2 work as a wrong password, removing the timing side
+            // channel that would otherwise enumerate valid usernames.
+            passwordHasher.matches(request.getPassword(), DUMMY_PASSWORD_HASH);
+            passwordMatches = false;
+        } else {
+            passwordMatches = passwordHasher.matches(request.getPassword(), authUser.getPasswordHash());
+        }
+
+        if (!passwordMatches) {
             int failedAttempts = loginAttempt.getFailedAttempts() + 1;
             loginAttempt.setFailedAttempts(failedAttempts);
             loginAttempt.setUpdatedAt(now);
             if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
                 loginAttempt.setLockedUntil(now.plusMinutes(LOGIN_LOCK_MINUTES));
                 authLoginAttemptMapper.updateById(loginAttempt);
+                LOGGER.warn("Login locked for username={} after {} consecutive failures.", username, failedAttempts);
                 throw new ResponseStatusException(
                         HttpStatus.TOO_MANY_REQUESTS,
                         "Too many failed login attempts. Try again in 15 minutes."

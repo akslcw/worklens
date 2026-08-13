@@ -396,18 +396,24 @@
 
 **证据**：提交见 git log（"Guard the usage view against stale date requests (M8)"）。
 
-## M9 · 登录接口安全加固 [ ]
+## M9 · 登录接口安全加固 [x] 已修复
 
-**位置**：`AuthServiceImpl.java:86`（短路导致用户名枚举时序侧信道）、`LoginRequest`（无长度上限）、锁定逻辑（无 IP 维度）。
+**位置**：`AuthServiceImpl.login`、`LoginRequest`。
 
 **问题**：未知用户名返回更快（可枚举工号）；任意已知工号每 15 分钟可被 5 次失败登录锁死（未认证 DoS）；超长密码 PBKDF2 是 CPU DoS 面。
 
-**修复方案**：
-1. 未知用户也执行一次 dummy PBKDF2，抹平时序差；
-2. `LoginRequest` 加 `@Size(max=64)`；
-3. 锁定增加可选 IP 维度（或全局失败速率限制），至少对"锁定计数"来源做审计日志。
+**修复方案（已实施）**：
+1. **时序抹平**：未知用户也执行一次 dummy PBKDF2 校验（同格式预计算哈希），消除用户名枚举时序侧信道；
+2. **长度上限**：`LoginRequest` 的 username ≤100、password ≤64（400），堵住超长输入 PBKDF2 DoS；
+3. **锁定审计日志**：账号锁定时记录 `Login locked for username=... after N consecutive failures` WARN（运维可追踪锁定来源）；
+4. 所有集成测试类补 `auth_login_attempts` 表清理（此前锁定状态跨测试类泄漏）。
 
-**验收标准**：单测：未知用户与错误密码耗时接近（阈值内）；超长密码 400；锁死场景日志可追踪。
+**验收标准**：
+- [x] 单测：未知用户仍执行密码校验（`AuthServiceImplTests.unknownUsernameStillRunsPasswordVerification`）；
+- [x] 集成测试：4 次失败 401 → 第 5 次 429 → 正确密码仍 429（锁定生效）；65 位密码 400；
+- [x] 全量后端 128/128 通过。
+
+**证据**：提交见 git log（"Harden login against enumeration and lockout DoS (M9)"）。
 
 ## M10 · 前端测试与构建工具链不一致 [ ]
 

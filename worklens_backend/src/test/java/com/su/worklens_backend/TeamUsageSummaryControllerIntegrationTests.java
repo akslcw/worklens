@@ -37,6 +37,7 @@ class TeamUsageSummaryControllerIntegrationTests extends PostgresIntegrationTest
     void cleanDatabase() {
         truncateIfExists("TRUNCATE TABLE usage_records RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_tokens RESTART IDENTITY CASCADE");
+        truncateIfExists("TRUNCATE TABLE auth_login_attempts RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE auth_users RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE employees RESTART IDENTITY CASCADE");
     }

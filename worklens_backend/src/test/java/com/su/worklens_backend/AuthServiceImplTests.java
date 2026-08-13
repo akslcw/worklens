@@ -1,6 +1,8 @@
 package com.su.worklens_backend;
 
 import com.su.worklens_backend.auth.AuthenticatedUser;
+import com.su.worklens_backend.dto.LoginRequest;
+import com.su.worklens_backend.entity.AuthLoginAttempt;
 import com.su.worklens_backend.entity.AuthToken;
 import com.su.worklens_backend.entity.AuthUser;
 import com.su.worklens_backend.mapper.AuthLoginAttemptMapper;
@@ -10,6 +12,7 @@ import com.su.worklens_backend.mapper.EmployeeMapper;
 import com.su.worklens_backend.service.PasswordHasher;
 import com.su.worklens_backend.service.impl.AuthServiceImpl;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -17,9 +20,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -86,5 +92,34 @@ class AuthServiceImplTests {
 
         assertThat(authenticatedUser).isNotNull();
         assertThat(authenticatedUser.getUsername()).isEqualTo("employee.alice");
+    }
+
+    @Test
+    void unknownUsernameStillRunsPasswordVerification() {
+        Clock clock = Clock.fixed(Instant.parse("2026-07-08T16:00:00Z"), HONG_KONG);
+        AuthUserMapper authUserMapper = mock(AuthUserMapper.class);
+        AuthLoginAttemptMapper attemptMapper = mock(AuthLoginAttemptMapper.class);
+        PasswordHasher passwordHasher = mock(PasswordHasher.class);
+        AuthLoginAttempt attempt = new AuthLoginAttempt();
+        attempt.setFailedAttempts(0);
+        when(attemptMapper.selectForUpdate(anyString())).thenReturn(attempt);
+        when(authUserMapper.selectOne(any())).thenReturn(null);
+
+        AuthServiceImpl authService = new AuthServiceImpl(
+                authUserMapper,
+                attemptMapper,
+                mock(AuthTokenMapper.class),
+                mock(EmployeeMapper.class),
+                passwordHasher,
+                clock
+        );
+        LoginRequest request = new LoginRequest();
+        request.setUsername("ghost-user");
+        request.setPassword("wrong-password");
+
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(passwordHasher).matches(eq("wrong-password"), anyString());
     }
 }
