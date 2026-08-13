@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Date;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -47,13 +48,15 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final AuthService authService;
+    private final Clock clock;
 
     public UsageRecordServiceImpl(UsageRecordMapper usageRecordMapper, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
-                                  AuthService authService) {
+                                  AuthService authService, Clock clock) {
         this.usageRecordMapper = usageRecordMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.authService = authService;
+        this.clock = clock;
     }
 
     @Override
@@ -144,7 +147,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
         usageRecord.setAppName(request.getAppName().trim());
         usageRecord.setStartedAt(request.getStartedAt());
         usageRecord.setEndedAt(request.getEndedAt());
-        usageRecord.setCreatedAt(LocalDateTime.now());
+        usageRecord.setCreatedAt(LocalDateTime.now(clock));
         usageRecord.setClientRecordId(clientRecordId);
         try {
             usageRecordMapper.insert(usageRecord);

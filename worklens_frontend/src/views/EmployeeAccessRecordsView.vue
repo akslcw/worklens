@@ -8,6 +8,7 @@ import {
 } from '../api/detailAccessRequests'
 import { clearSession, readStoredSession } from '../auth/session'
 import EmployeeWorkspaceNav from '../components/EmployeeWorkspaceNav.vue'
+import { hongKongDateTimeString } from '../utils/hongKongTime'
 
 const router = useRouter()
 const session = readStoredSession()
@@ -110,13 +111,7 @@ function formatDateTime(value: string | null) {
     return '暂无'
   }
 
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${year}/${month}/${day} ${hour}:${minute}`
+  return hongKongDateTimeString(value)
 }
 
 function toErrorMessage(error: unknown, fallback: string) {

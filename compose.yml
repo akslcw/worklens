@@ -25,6 +25,7 @@ services:
     environment:
       WORKLENS_DB_HOST: postgres
       WORKLENS_DB_PORT: 5432
+      TZ: ${WORKLENS_TZ:-Asia/Hong_Kong}
       WORKLENS_DB_NAME: ${WORKLENS_DB_NAME:-worklens}
       WORKLENS_DB_USERNAME: ${WORKLENS_DB_USERNAME:-worklens}
       WORKLENS_DB_PASSWORD: ${WORKLENS_DB_PASSWORD:-change-me}

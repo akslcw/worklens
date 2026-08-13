@@ -6,6 +6,7 @@ import type { ReportHistoryItem } from '../api/teamReports'
 import { getUsageView, type UsageAppCard, type UsageView } from '../api/usageRecords'
 import { clearSession, readStoredSession } from '../auth/session'
 import EmployeeWorkspaceNav from '../components/EmployeeWorkspaceNav.vue'
+import { hongKongDateString, hongKongDateTimeString, hongKongTimeString } from '../utils/hongKongTime'
 
 const router = useRouter()
 const session = readStoredSession()
@@ -99,11 +100,7 @@ async function handleLogout() {
 }
 
 function todayDateString() {
-  const date = new Date()
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return hongKongDateString(new Date())
 }
 
 function formatDateTime(value: string | null) {
@@ -111,13 +108,7 @@ function formatDateTime(value: string | null) {
     return '本次即时生成'
   }
 
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${year}/${month}/${day} ${hour}:${minute}`
+  return hongKongDateTimeString(value)
 }
 
 function formatDateOnly(value: string) {
@@ -126,10 +117,7 @@ function formatDateOnly(value: string) {
 }
 
 function formatTimeOnly(value: string) {
-  const date = new Date(value)
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${hour}:${minute}`
+  return hongKongTimeString(value)
 }
 
 function formatDurationSeconds(seconds: number) {

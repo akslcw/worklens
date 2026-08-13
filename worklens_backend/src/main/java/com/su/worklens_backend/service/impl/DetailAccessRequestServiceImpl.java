@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,19 +52,22 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     private final UsageRecordMapper usageRecordMapper;
     private final UsageRecordService usageRecordService;
     private final AuthService authService;
+    private final Clock clock;
 
     public DetailAccessRequestServiceImpl(DetailAccessAuditLogMapper detailAccessAuditLogMapper,
                                           DetailAccessRequestMapper detailAccessRequestMapper,
                                           EmployeeMapper employeeMapper,
                                           UsageRecordMapper usageRecordMapper,
                                           UsageRecordService usageRecordService,
-                                          AuthService authService) {
+                                          AuthService authService,
+                                          Clock clock) {
         this.detailAccessAuditLogMapper = detailAccessAuditLogMapper;
         this.detailAccessRequestMapper = detailAccessRequestMapper;
         this.employeeMapper = employeeMapper;
         this.usageRecordMapper = usageRecordMapper;
         this.usageRecordService = usageRecordService;
         this.authService = authService;
+        this.clock = clock;
     }
 
     @Override
@@ -79,7 +83,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
         detailAccessRequest.setTargetEmployeeId(targetEmployee.getId());
         detailAccessRequest.setReason(request.getReason().trim());
         detailAccessRequest.setStatus(STATUS_PENDING);
-        detailAccessRequest.setCreatedAt(LocalDateTime.now());
+        detailAccessRequest.setCreatedAt(LocalDateTime.now(clock));
         detailAccessRequestMapper.insert(detailAccessRequest);
 
         return toResponse(detailAccessRequest);
@@ -105,7 +109,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
         }
 
         detailAccessRequest.setStatus(normalizedDecision);
-        detailAccessRequest.setProcessedAt(LocalDateTime.now());
+        detailAccessRequest.setProcessedAt(LocalDateTime.now(clock));
         detailAccessRequest.setProcessedByEmployeeId(authenticatedUser.getEmployeeId());
         detailAccessRequestMapper.updateById(detailAccessRequest);
 
@@ -258,7 +262,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
         auditLog.setDetailAccessRequestId(detailAccessRequest.getId());
         auditLog.setViewerEmployeeId(authenticatedUser.getEmployeeId());
         auditLog.setTargetEmployeeId(detailAccessRequest.getTargetEmployeeId());
-        auditLog.setViewedAt(LocalDateTime.now());
+        auditLog.setViewedAt(LocalDateTime.now(clock));
         detailAccessAuditLogMapper.insert(auditLog);
     }
 

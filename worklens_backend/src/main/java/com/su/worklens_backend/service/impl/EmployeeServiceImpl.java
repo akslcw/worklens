@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import java.util.List;
@@ -36,13 +37,16 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final AuthUserMapper authUserMapper;
     private final AuthService authService;
     private final PasswordHasher passwordHasher;
+    private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public EmployeeServiceImpl(EmployeeMapper employeeMapper, AuthUserMapper authUserMapper, AuthService authService, PasswordHasher passwordHasher) {
+    public EmployeeServiceImpl(EmployeeMapper employeeMapper, AuthUserMapper authUserMapper, AuthService authService,
+                               PasswordHasher passwordHasher, Clock clock) {
         this.employeeMapper = employeeMapper;
         this.authUserMapper = authUserMapper;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
+        this.clock = clock;
     }
 
     @Override
@@ -51,7 +55,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee employee = new Employee();
         employee.setName(request.getName().trim());
         employee.setEmployeeNo(request.getEmployeeNo().trim());
-        employee.setCreatedAt(LocalDateTime.now());
+        employee.setCreatedAt(LocalDateTime.now(clock));
         employeeMapper.insert(employee);
 
         AuthUser authUser = new AuthUser();
@@ -61,7 +65,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         authUser.setRole(EMPLOYEE_ROLE);
         authUser.setEmployeeId(employee.getId());
         authUser.setMustChangePassword(true);
-        authUser.setCreatedAt(LocalDateTime.now());
+        authUser.setCreatedAt(LocalDateTime.now(clock));
         authUserMapper.insert(authUser);
 
         return new CreateEmployeeResponse(employee, temporaryPassword);

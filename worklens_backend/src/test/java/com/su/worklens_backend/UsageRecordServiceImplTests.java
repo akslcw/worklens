@@ -17,6 +17,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -46,7 +49,8 @@ class UsageRecordServiceImplTests {
                 usageRecordMapper,
                 jdbcTemplate,
                 new ObjectMapper(),
-                enforcingRoleAuthService()
+                enforcingRoleAuthService(),
+                Clock.fixed(Instant.parse("2026-07-08T16:00:00Z"), ZoneId.of("Asia/Hong_Kong"))
         );
 
         TeamUsageSummaryResponse response = service.getTeamUsageSummary(
@@ -67,7 +71,8 @@ class UsageRecordServiceImplTests {
                 mock(UsageRecordMapper.class),
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
-                enforcingRoleAuthService()
+                enforcingRoleAuthService(),
+                Clock.fixed(Instant.parse("2026-07-08T16:00:00Z"), ZoneId.of("Asia/Hong_Kong"))
         );
 
         assertThatThrownBy(() -> service.getTeamUsageSummary(

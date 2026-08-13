@@ -137,7 +137,7 @@ public class AuthServiceImpl implements AuthService {
                 new LambdaQueryWrapper<AuthToken>().eq(AuthToken::getToken, tokenValue)
         );
 
-        if (authToken == null || authToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (authToken == null || authToken.getExpiresAt().isBefore(LocalDateTime.now(clock))) {
             return null;
         }
 

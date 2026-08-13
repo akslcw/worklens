@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,9 +42,11 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     private static final String WEEKLY_REPORTS_SOURCE = "WEEKLY_REPORTS";
 
     private final JdbcTemplate jdbcTemplate;
+    private final Clock clock;
 
-    public ReportArchiveServiceImpl(JdbcTemplate jdbcTemplate) {
+    public ReportArchiveServiceImpl(JdbcTemplate jdbcTemplate, Clock clock) {
         this.jdbcTemplate = jdbcTemplate;
+        this.clock = clock;
     }
 
     @Override
@@ -126,7 +129,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertEmployeeDailyReport(EmployeeDailyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (
@@ -172,7 +175,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertTeamDailyReport(TeamDailyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (
@@ -218,7 +221,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertEmployeeWeeklyReport(EmployeeWeeklyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (
@@ -264,7 +267,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertTeamWeeklyReport(TeamWeeklyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (
@@ -310,7 +313,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertEmployeeMonthlyReport(EmployeeMonthlyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (
@@ -356,7 +359,7 @@ public class ReportArchiveServiceImpl implements ReportArchiveService {
     }
 
     private void insertTeamMonthlyReport(TeamMonthlyReportArchiveRequest report) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         jdbcTemplate.update(
                 """
                         INSERT INTO llm_reports (

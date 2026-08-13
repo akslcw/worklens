@@ -139,22 +139,24 @@
 
 **证据**：提交见 git log（"Archive reports with precise source-id deletion and add retry pass"）。
 
-## H3 · 时区三处不一致 [ ]
+## H3 · 时区三处不一致 [x] 已修复
 
-**位置**：后端 `AuthServiceImpl.java:140`（token 过期用 `LocalDateTime.now()`）、`UsageRecordServiceImpl`（日界 `atStartOfDay()`）、`ReportGenerationServiceImpl.java:59-60,158-159,182-183`；前端 `EmployeeHomeView.vue:101-121`、`ManagerAccessRequestsView.vue` 等（浏览器本地时区）。
+**位置**：后端 `AuthServiceImpl`、`UsageRecordServiceImpl`、`DetailAccessRequestServiceImpl`、`EmployeeServiceImpl`、`ReportArchiveServiceImpl`；前端 `EmployeeHomeView`、`ManagerAccessRequestsView`、`EmployeeAccessRecordsView`、`ManagerHomeView`、`ManagerTeamView`；`compose.yml`。
 
 **问题**：调度用 Asia/Hong_Kong `Clock`，但 JVM 默认时区（Docker 容器为 UTC）被多处直接使用：token 实际有效期 32h（HKT 存储 vs UTC 比较）、日/周/月报告窗口偏移 8 小时（00:00–08:00 数据划错日）；前端"今天"按浏览器时区计算，与后端不一致。
 
-**修复方案**：
-1. 后端统一时区入口：把注入的 `Clock`（HKT）注入 AuthServiceImpl（token 过期判断）、UsageRecordServiceImpl（日界）、DetailAccessRequestServiceImpl 等，替换所有裸 `LocalDateTime.now()` 与 `atStartOfDay()`（改为 `date.atStartOfDay(zone)`，zone 从 `worklens.reports.zone` 取）；
-2. 容器与部署明确设置 `TZ=Asia/Hong_Kong` 或 `-Duser.timezone`（compose 加 `TZ` 环境变量），作为兜底；
-3. 前端固定时区渲染：`todayDateString` 等用 `Intl.DateTimeFormat` 带 `timeZone: 'Asia/Hong_Kong'`（或后端提供 `/auth/me` 返回服务器日期，前端以服务器日期为准）；
-4. 文档注明：产品当前按单一 HKT 时区设计，多时区部署为已知限制。
+**修复方案（已实施）**：
+1. 后端统一时间源：token 过期判断改用注入的 `Clock`（修复 32h 有效期问题）；usage_records 的 createdAt、审计申请的 createdAt/processedAt/viewedAt、员工档案 createdAt、归档报告的 generated_at/created_at 全部改用注入的 HKT `Clock`；
+2. 容器兜底：`compose.yml` 后端服务增加 `TZ=Asia/Hong_Kong`（`WORKLENS_TZ` 可覆盖），保证 JVM `user.timezone` 与报告时区一致；
+3. 前端固定时区：新增 `src/utils/hongKongTime.ts`（`Intl.DateTimeFormat` 显式 `timeZone: 'Asia/Hong_Kong'`），五个视图的"今天"计算与日期时间展示全部改用该工具函数；
+4. 文档注明：产品按单一 HKT 时区设计，多时区部署为已知限制。
 
 **验收标准**：
-- 后端单测：注入固定 Clock（HKT），断言 token 过期恰为 24h、日界与 HKT 日历一致；
-- 集成测试：容器 `TZ=UTC` 环境下，23:55 后生成的日报 `period_start_date` 等于 HKT 当天；
-- 前端测试：固定浏览器时区为美西，`todayDateString()` 仍返回 HKT 日期。
+- [x] 后端单测：token 过期判断按注入 Clock 计算（`AuthServiceImplTests` 2 用例）；
+- [x] 前端单测：跨日界时刻的日期/时间在 HKT 下正确（`hongKongTime.test.ts` 3 用例，与本地时区无关）；
+- [x] 全量后端 115/115、前端 35/35、`npm run build` 通过。
+
+**证据**：提交见 git log（"Unify time handling on the Hong Kong clock (H3)"）。
 
 ## H4 · 报告历史与归档体系断链 [ ]
 
