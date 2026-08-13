@@ -74,7 +74,8 @@ public class DeepSeekLlmProvider implements LlmProvider {
     private boolean isTimeout(ResourceAccessException exception) {
         Throwable current = exception;
         while (current != null) {
-            if (current instanceof SocketTimeoutException) {
+            if (current instanceof SocketTimeoutException
+                    || current instanceof java.net.http.HttpTimeoutException) {
                 return true;
             }
             String message = current.getMessage();
