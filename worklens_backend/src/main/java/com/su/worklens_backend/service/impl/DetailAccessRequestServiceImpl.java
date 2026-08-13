@@ -171,8 +171,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     @Transactional
     public List<UsageRecordResponse> viewApprovedUsageRecords(Long requestId, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, MANAGER_ROLE);
-        DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
-        validateViewAuthorization(detailAccessRequest, authenticatedUser);
+        DetailAccessRequest detailAccessRequest = consumeAuthorization(requestId, authenticatedUser);
 
         List<UsageRecordResponse> usageRecords = usageRecordMapper.selectList(
                         new LambdaQueryWrapper<UsageRecord>()
@@ -182,7 +181,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
                 .map(this::toUsageRecordResponse)
                 .toList();
 
-        markAuthorizationUsedAndAudit(detailAccessRequest, authenticatedUser);
+        writeAuditLog(detailAccessRequest, authenticatedUser);
         return usageRecords;
     }
 
@@ -190,8 +189,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
     @Transactional
     public UsageViewResponse viewApprovedUsageView(Long requestId, LocalDate date, int page, int pageSize, AuthenticatedUser authenticatedUser) {
         authService.requireRole(authenticatedUser, MANAGER_ROLE);
-        DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
-        validateViewAuthorization(detailAccessRequest, authenticatedUser);
+        DetailAccessRequest detailAccessRequest = consumeAuthorization(requestId, authenticatedUser);
 
         UsageViewResponse usageView = usageRecordService.getUsageViewForEmployee(
                 detailAccessRequest.getTargetEmployeeId(),
@@ -200,7 +198,7 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
                 pageSize
         );
 
-        markAuthorizationUsedAndAudit(detailAccessRequest, authenticatedUser);
+        writeAuditLog(detailAccessRequest, authenticatedUser);
         return usageView;
     }
 
@@ -239,16 +237,29 @@ public class DetailAccessRequestServiceImpl implements DetailAccessRequestServic
         }
     }
 
-    private void markAuthorizationUsedAndAudit(DetailAccessRequest detailAccessRequest, AuthenticatedUser authenticatedUser) {
+    /**
+     * Validates ownership and state, then atomically consumes the one-time
+     * authorization with a conditional UPDATE. The UPDATE takes a row lock, so
+     * concurrent viewers cannot both pass: the loser sees 0 updated rows.
+     */
+    private DetailAccessRequest consumeAuthorization(Long requestId, AuthenticatedUser authenticatedUser) {
+        DetailAccessRequest detailAccessRequest = detailAccessRequestMapper.selectById(requestId);
+        validateViewAuthorization(detailAccessRequest, authenticatedUser);
+
+        int updated = detailAccessRequestMapper.markUsedIfApproved(requestId);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AUTHORIZATION_USED_MESSAGE);
+        }
+        return detailAccessRequest;
+    }
+
+    private void writeAuditLog(DetailAccessRequest detailAccessRequest, AuthenticatedUser authenticatedUser) {
         DetailAccessAuditLog auditLog = new DetailAccessAuditLog();
         auditLog.setDetailAccessRequestId(detailAccessRequest.getId());
         auditLog.setViewerEmployeeId(authenticatedUser.getEmployeeId());
         auditLog.setTargetEmployeeId(detailAccessRequest.getTargetEmployeeId());
         auditLog.setViewedAt(LocalDateTime.now());
         detailAccessAuditLogMapper.insert(auditLog);
-
-        detailAccessRequest.setStatus(STATUS_USED);
-        detailAccessRequestMapper.updateById(detailAccessRequest);
     }
 
     private DetailAccessRequestResponse toResponse(DetailAccessRequest detailAccessRequest) {

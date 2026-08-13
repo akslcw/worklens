@@ -18,6 +18,12 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -448,6 +454,44 @@ class DetailAccessRequestControllerIntegrationTests extends PostgresIntegrationT
                 .andExpect(jsonPath("$[3].reason").value("Rejected request"))
                 .andExpect(jsonPath("$[3].status").value("REJECTED"))
                 .andExpect(jsonPath("$[3].hasBeenViewed").value(false));
+    }
+
+    @Test
+    void concurrentViewsOfApprovedAuthorizationAllowExactlyOneViewer() throws Exception {
+        long managerEmployeeId = insertUser("manager", PASSWORD_HASH, "MANAGER", "M001", "Manager User");
+        long targetEmployeeId = insertUser("employee.bob", PASSWORD_HASH, "EMPLOYEE", "E002", "Bob");
+        insertUsageRecord(targetEmployeeId, "Slack", "2026-07-04T09:00:00", "2026-07-04T09:30:00");
+        long requestId = insertProcessedDetailAccessRequest(managerEmployeeId, targetEmployeeId, "Quarterly compliance review", "APPROVED", targetEmployeeId);
+        String managerToken = loginAndReadToken("manager", PASSWORD);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch start = new CountDownLatch(1);
+            Callable<Integer> viewRequest = () -> {
+                ready.countDown();
+                start.await(10, TimeUnit.SECONDS);
+                MvcResult result = mockMvc.perform(get("/detail-access-requests/{id}/usage-records", requestId)
+                                .header("Authorization", "Bearer " + managerToken))
+                        .andReturn();
+                return result.getResponse().getStatus();
+            };
+            Future<Integer> firstView = executor.submit(viewRequest);
+            Future<Integer> secondView = executor.submit(viewRequest);
+
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<Integer> statuses = List.of(
+                    firstView.get(30, TimeUnit.SECONDS),
+                    secondView.get(30, TimeUnit.SECONDS)
+            );
+            assertThat(statuses).containsExactlyInAnyOrder(200, 403);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertRequestUsedAndAudited(requestId, managerEmployeeId, targetEmployeeId);
     }
 
     private long insertUser(String username, String passwordHash, String role, String employeeNo, String name) {
