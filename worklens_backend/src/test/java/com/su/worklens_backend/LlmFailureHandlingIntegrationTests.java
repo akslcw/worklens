@@ -1,5 +1,6 @@
 package com.su.worklens_backend;
 
+import com.su.worklens_backend.controller.LlmController;
 import com.su.worklens_backend.exception.LlmProviderException;
 import com.su.worklens_backend.exception.LlmProviderTimeoutException;
 import com.su.worklens_backend.service.LlmProvider;
@@ -34,11 +35,15 @@ class LlmFailureHandlingIntegrationTests extends PostgresIntegrationTestSupport 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private LlmController llmController;
+
     @MockBean
     private LlmProvider llmProvider;
 
     @BeforeEach
     void cleanDatabase() {
+        llmController.clearTestResponseRateLimit();
         truncateIfExists("TRUNCATE TABLE llm_reports RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE detail_access_audit_logs RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE detail_access_requests RESTART IDENTITY CASCADE");
@@ -50,13 +55,13 @@ class LlmFailureHandlingIntegrationTests extends PostgresIntegrationTestSupport 
 
     @Test
     void timeoutFailureReturns504WithClearMessage() throws Exception {
-        insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
-        String employeeToken = loginAndReadToken("employee.alice", PASSWORD);
+        insertUser("manager", PASSWORD_HASH, "MANAGER", "M001", "Manager User");
+        String managerToken = loginAndReadToken("manager", PASSWORD);
         given(llmProvider.generateText(anyString()))
                 .willThrow(new LlmProviderTimeoutException("DeepSeek API request timed out"));
 
         mockMvc.perform(get("/llm/test-response")
-                        .header("Authorization", "Bearer " + employeeToken))
+                        .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isGatewayTimeout())
                 .andExpect(jsonPath("$.code").value("LLM_TIMEOUT"))
                 .andExpect(jsonPath("$.message").value("DeepSeek API request timed out"));

@@ -1,5 +1,6 @@
 package com.su.worklens_backend;
 
+import com.su.worklens_backend.controller.LlmController;
 import com.su.worklens_backend.service.LlmProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,11 +33,15 @@ class LlmControllerIntegrationTests extends PostgresIntegrationTestSupport {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private LlmController llmController;
+
     @MockBean
     private LlmProvider llmProvider;
 
     @BeforeEach
     void cleanDatabase() {
+        llmController.clearTestResponseRateLimit();
         truncateIfExists("TRUNCATE TABLE detail_access_audit_logs RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE detail_access_requests RESTART IDENTITY CASCADE");
         truncateIfExists("TRUNCATE TABLE usage_records RESTART IDENTITY CASCADE");
@@ -52,20 +57,17 @@ class LlmControllerIntegrationTests extends PostgresIntegrationTestSupport {
     }
 
     @Test
-    void loggedInEmployeeCanCallTestResponse() throws Exception {
+    void employeeCannotCallTestResponse() throws Exception {
         insertUser("employee.alice", PASSWORD_HASH, "EMPLOYEE", "E001", "Alice");
         String employeeToken = loginAndReadToken("employee.alice", PASSWORD);
-        given(llmProvider.generateText(eq("Please respond to this fixed WorkLens connectivity check text.")))
-                .willReturn("Employee test response");
 
         mockMvc.perform(get("/llm/test-response")
                         .header("Authorization", "Bearer " + employeeToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.response").value("Employee test response"));
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void loggedInManagerCanCallTestResponse() throws Exception {
+    void managerCanCallTestResponseOncePerRateLimitWindow() throws Exception {
         insertUser("manager", PASSWORD_HASH, "MANAGER", "M001", "Manager User");
         String managerToken = loginAndReadToken("manager", PASSWORD);
         given(llmProvider.generateText(eq("Please respond to this fixed WorkLens connectivity check text.")))
@@ -75,6 +77,10 @@ class LlmControllerIntegrationTests extends PostgresIntegrationTestSupport {
                         .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.response").value("Manager test response"));
+
+        mockMvc.perform(get("/llm/test-response")
+                        .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isTooManyRequests());
     }
 
     private long insertUser(String username, String passwordHash, String role, String employeeNo, String name) {

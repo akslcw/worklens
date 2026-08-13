@@ -315,15 +315,20 @@
 
 **证据**：提交见 git log（"Sanitize app names and harden LLM prompts (M3)"）。
 
-## M4 · `/llm/test-response` 无角色与频率限制 [ ]
+## M4 · `/llm/test-response` 无角色与频率限制 [x] 已修复
 
-**位置**：`LlmController.java`、`AuthTokenFilter`（未覆盖该路径）。
+**位置**：`LlmController.getTestResponse`。
 
 **问题**：任意登录用户可无限刷 DeepSeek API 烧钱。
 
-**修复方案**：该接口加 MANAGER 角色断言 + 简单内存限频（如每用户每 10 分钟 1 次）；或直接下线该调试接口（生产用 `/health` 即可）。
+**修复方案（已实施）**：接口改为 MANAGER 角色 + 内存限频（每用户每 10 分钟 1 次，超限 429）；提供 `clearTestResponseRateLimit()` 测试钩子隔离测试间状态。
 
-**验收标准**：集成测试：员工调用 403；限频窗口内第二次调用 429。
+**验收标准**：
+- [x] 集成测试：员工调用 403；管理者窗口内第一次 200、第二次 429；
+- [x] 既有 LLM 失败处理测试改用 MANAGER 角色并保持 504/502 语义；
+- [x] 全量后端 125/125 通过。
+
+**证据**：提交见 git log（"Restrict and rate-limit the LLM test endpoint (M4)"）。
 
 ## M5 · 前端纵深防御与交互缺陷 [ ]
 
