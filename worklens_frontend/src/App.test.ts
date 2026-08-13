@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 import App from './App.vue'
-import { resolveHomePath } from './auth/session'
+import { resolveHomePath, removeLegacyLocalSession } from './auth/session'
 import type { RouteRole } from './auth/types'
 import { createAppRouter } from './router'
 
@@ -175,6 +175,8 @@ describe('App routing', () => {
       username: 'manager',
       role: 'MANAGER',
     }))
+
+    removeLegacyLocalSession()
 
     const router = createAppRouter(createMemoryHistory())
     router.push('/')

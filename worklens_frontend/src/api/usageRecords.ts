@@ -1,13 +1,5 @@
 import { request } from './http'
 
-export type UsageRecord = {
-  id: number
-  appName: string
-  startedAt: string
-  endedAt: string
-  createdAt: string
-}
-
 export type UsageSegment = {
   startedAt: string
   endedAt: string
@@ -43,10 +35,6 @@ export type UsageView = {
   totalApps?: number
   items?: UsageAppCard[]
   report?: UsageReportView | null
-}
-
-export async function getUsageRecords(token: string) {
-  return request<UsageRecord[]>('/usage-records', { method: 'GET' }, token)
 }
 
 export async function getUsageView(token: string, date: string, page: number, pageSize: number) {

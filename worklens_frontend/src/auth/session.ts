@@ -11,7 +11,6 @@ export type AuthSession = {
 }
 
 export function readStoredSession() {
-  localStorage.removeItem(SESSION_STORAGE_KEY)
   const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
   if (!raw) {
     return null
@@ -23,6 +22,12 @@ export function readStoredSession() {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     return null
   }
+}
+
+/** One-time cleanup of the legacy localStorage token storage (moved to
+ * sessionStorage). Call once at startup, not on every read. */
+export function removeLegacyLocalSession() {
+  localStorage.removeItem(SESSION_STORAGE_KEY)
 }
 
 export function persistSession(session: AuthSession) {

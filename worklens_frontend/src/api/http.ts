@@ -28,7 +28,7 @@ export async function request<T>(path: string, init?: RequestInit, token?: strin
   }
 
   if (response.status === 204) {
-    throw new Error('Expected a JSON response but received no content')
+    return undefined as T
   }
 
   return (await response.json()) as T
