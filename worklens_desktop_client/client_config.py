@@ -42,6 +42,8 @@ def load_client_config(config_path: Path | None = None) -> ClientConfig:
         raise ClientConfigError("config.ini 缺少 [backend] 下的 base_url 配置。")
 
     base_url = parser.get("backend", "base_url").strip().rstrip("/")
+    if not base_url:
+        raise ClientConfigError("config.ini 中的 base_url 为空。请填写 WorkLens 服务器地址后重新启动。")
     parsed_url = urlparse(base_url)
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
         raise ClientConfigError("config.ini 中的 base_url 必须是有效的 HTTP 或 HTTPS 地址。")

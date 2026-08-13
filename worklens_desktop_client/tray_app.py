@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import threading
 from tkinter import Tk, messagebox, simpledialog
+from urllib.parse import urlparse
 
 import pystray
 from PIL import Image
@@ -10,6 +11,7 @@ from PIL import ImageDraw
 
 from worklens_desktop_client.background_runner import BackgroundRunner
 from worklens_desktop_client.api_client import LoginError
+from worklens_desktop_client.api_client import WorkLensApiClient
 from worklens_desktop_client.autostart import AutostartError
 from worklens_desktop_client.autostart import is_autostart_enabled
 from worklens_desktop_client.autostart import set_autostart_enabled
@@ -31,12 +33,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-interval-seconds", type=int, default=5)
     parser.add_argument("--idle-threshold-seconds", type=int, default=300)
     parser.add_argument("--upload-interval-seconds", type=int, default=300)
-    parser.add_argument(
-        "--cache-db",
-        default=None,
-    )
+    parser.add_argument("--cache-db", default=None)
     parser.add_argument("--username", default=None)
-    parser.add_argument("--password", default=None)
     return parser.parse_args()
 
 
@@ -49,14 +47,11 @@ def create_status_image(status: str) -> Image.Image:
     return image
 
 
-def prompt_credentials(initial_username: str | None, initial_password: str | None) -> tuple[str, str]:
-    if initial_username and initial_password:
-        return initial_username, initial_password
-
+def prompt_credentials(initial_username: str | None) -> tuple[str, str]:
     root = Tk()
     root.withdraw()
     username = initial_username or simpledialog.askstring("WorkLens", "Username:", parent=root)
-    password = initial_password or simpledialog.askstring("WorkLens", "Password:", parent=root, show="*")
+    password = simpledialog.askstring("WorkLens", "Password:", parent=root, show="*")
     root.destroy()
 
     if not username or not password:
@@ -108,7 +103,18 @@ def main() -> None:
         return
     cache_db = args.cache_db or str(default_cache_path())
     logger.info("Starting WorkLens desktop client. base_url=%s config=%s", base_url, config_path)
-    username, password = prompt_credentials(args.username, args.password)
+    if urlparse(base_url).scheme == "http":
+        logger.warning(
+            "正在通过明文 HTTP 连接服务器（仅限本机演示环境）。"
+            "局域网或远程部署请务必使用 HTTPS，否则登录凭据与采集数据可能被窃听。"
+        )
+    try:
+        WorkLensApiClient(base_url)
+    except ValueError as error:
+        logger.error("Invalid base_url configuration: %s", error)
+        show_configuration_error(str(error))
+        return
+    username, password = prompt_credentials(args.username)
 
     status_holder = {"value": "STOPPED"}
     display_name_holder = {"value": username}

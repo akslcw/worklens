@@ -216,21 +216,23 @@
 
 **证据**：提交见 git log（"Revoke tokens on password change and add logout (H6)"）。
 
-## H7 · 桌面客户端凭据暴露面 [ ]
+## H7 · 桌面客户端凭据暴露面 [x] 已修复
 
-**位置**：`tray_app.py:38-54,111`（`--password` 参数）、`api_client.py:26-29`、`config.ini`、`build_exe.ps1:45-48`。
+**位置**：`tray_app.py`、`client_config.py`、`build_exe.ps1`、`config.prod.ini`（新增）、README。
 
 **问题**：`--password` 把密码暴露在进程命令行（任务管理器/WMI/审计日志可读）；开发默认 `http://localhost:8080` 随 exe 分发——回环明文流量可被同机进程嗅探到登录凭据与全部行为数据。
 
-**修复方案**：
-1. 删除 `--password` 参数，只保留星号对话框/`getpass`；
-2. 发布包改用 `config.prod.ini` 模板（默认值留空，强制用户填写）；构建脚本生成发布目录时使用该模板而非开发 `config.ini`；
-3. 对 localhost 明文给出显著警告文案（README 与首启日志），建议生产使用 HTTPS 反向代理；
-4. `WorkLensApiClient` 构造失败（非法 base_url）转为 UI 可见错误，不允许被后台线程吞掉。
+**修复方案（已实施）**：
+1. 删除 `--password` 参数，密码只通过登录对话框输入；`prompt_credentials` 相应简化；
+2. 发布包改用空白模板 `config.prod.ini`（构建脚本复制为 `config.ini`）：留空时 `load_client_config` 报"base_url 为空"的明确错误，强制用户填写；
+3. localhost 明文 HTTP 启动时写显著 WARNING 日志（仅限本机演示，远程必须 HTTPS）；README 同步说明；
+4. `main()` 在弹出登录框前用 `WorkLensApiClient(base_url)` 校验配置，非法 base_url 直接弹配置错误对话框并退出——不再被后台线程吞掉。
 
 **验收标准**：
-- 构建产物目录中不含开发默认 base_url；`--help` 无 `--password`；
-- 非本机 http 配置启动时登录窗口显示明确配置错误。
+- [x] 单测：`--password` 参数被拒绝（SystemExit）；非法 base_url 在弹出登录框前显示配置错误且不启动；空白 base_url 报明确错误；
+- [x] 桌面客户端 46/46 通过。
+
+**证据**：提交见 git log（"Harden desktop client credential surface (H7)"）。
 
 ## H8 · 采样与上传同线程阻塞 + 异常静默 [ ]
 

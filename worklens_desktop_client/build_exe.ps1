@@ -43,7 +43,7 @@ if (-not (Test-Path -LiteralPath $executable)) {
 }
 
 Copy-Item `
-    -LiteralPath (Join-Path $clientRoot "config.ini") `
+    -LiteralPath (Join-Path $clientRoot "config.prod.ini") `
     -Destination (Join-Path $clientRoot "dist\WorkLens\config.ini") `
     -Force
 

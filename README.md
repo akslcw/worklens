@@ -68,14 +68,16 @@ PostgreSQL 用户名和密码只在数据卷首次初始化时生效。已有数
 
 普通员工不需要安装 Python 或任何依赖。推荐从项目的 GitHub Releases 下载 `WorkLens-windows-x64.zip`，完整解压后保留目录结构，不能只复制其中的 `WorkLens.exe`。
 
-首次运行前，打开 exe 同目录的 `config.ini`，填写后端地址：
+首次运行前，打开 exe 同目录的 `config.ini`（发布包内置的空白模板），填写后端地址：
 
 ```ini
 [backend]
 base_url=http://localhost:8080
 ```
 
-本机 Docker Compose 演示环境可以保留默认值；连接远程服务时应使用有效的 HTTPS 地址。修改配置后无需重新打包。
+- 仅在本机 Docker Compose 演示环境可填写 `http://localhost:8080`。明文 HTTP 流量可被本机其他进程窃听，**局域网或远程部署必须使用 HTTPS 地址**（客户端对非本机地址强制要求 HTTPS，否则拒绝启动并提示配置错误）。
+- 留空或不填写时客户端会提示"base_url 为空"。
+- 客户端不再接受 `--password` 命令行参数：密码只通过登录对话框输入，避免出现在进程命令行中。修改配置后无需重新打包。
 
 员工应先在 Web 端完成首次登录和强制改密，然后双击 `WorkLens.exe`：
 

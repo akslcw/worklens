@@ -36,6 +36,14 @@ class ClientConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ClientConfigError, "有效的 HTTP 或 HTTPS 地址"):
                 load_client_config(config_path)
 
+    def test_blank_base_url_has_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "config.ini"
+            config_path.write_text("[backend]\nbase_url=\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ClientConfigError, "base_url 为空"):
+                load_client_config(config_path)
+
 
 if __name__ == "__main__":
     unittest.main()
