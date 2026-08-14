@@ -4,7 +4,6 @@ import com.su.worklens_backend.config.LlmConfiguration;
 import com.su.worklens_backend.exception.LlmProviderTimeoutException;
 import com.su.worklens_backend.service.LlmProvider;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -27,7 +26,6 @@ class LlmConfigurationTests {
     @Test
     void llmProviderWithBlankApiKeyStillBootsAndFailsCallsClearly() {
         LlmProvider provider = new LlmConfiguration().llmProvider(
-                new RestTemplateBuilder(),
                 "https://api.deepseek.com",
                 "   ",
                 "deepseek-v4-flash",
@@ -44,7 +42,6 @@ class LlmConfigurationTests {
     void llmProviderUsesConfiguredTimeoutsForHangingUpstream() throws Exception {
         try (HangingTcpServer server = HangingTcpServer.start()) {
             LlmProvider provider = new LlmConfiguration().llmProvider(
-                    new RestTemplateBuilder(),
                     "http://127.0.0.1:" + server.port(),
                     "test-api-key",
                     "deepseek-v4-flash",

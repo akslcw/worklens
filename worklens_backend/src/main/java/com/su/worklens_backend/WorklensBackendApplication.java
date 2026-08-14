@@ -1,5 +1,6 @@
 package com.su.worklens_backend;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -22,5 +23,14 @@ public class WorklensBackendApplication {
     @Bean
     public Clock worklensReportClock(@Value("${worklens.reports.zone:Asia/Hong_Kong}") String zoneId) {
         return Clock.system(ZoneId.of(zoneId));
+    }
+
+    /**
+     * Spring Boot 4 no longer auto-configures an ObjectMapper bean; services
+     * and tests inject this one for report JSON (de)serialization.
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 }

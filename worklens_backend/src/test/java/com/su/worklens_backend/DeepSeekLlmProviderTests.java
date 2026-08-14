@@ -9,7 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.net.SocketTimeoutException;
 
@@ -26,10 +26,10 @@ class DeepSeekLlmProviderTests {
 
     @Test
     void generateTextPostsPromptToDeepSeekAndReturnsAssistantMessage() {
-        RestTemplate restTemplate = new RestTemplate();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         DeepSeekLlmProvider provider = new DeepSeekLlmProvider(
-                restTemplate,
+                builder.build(),
                 "https://api.deepseek.com",
                 "test-api-key",
                 "deepseek-v4-flash"
@@ -70,10 +70,10 @@ class DeepSeekLlmProviderTests {
 
     @Test
     void generateTextWrapsTimeoutAsLlmProviderTimeoutException() {
-        RestTemplate restTemplate = new RestTemplate();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         DeepSeekLlmProvider provider = new DeepSeekLlmProvider(
-                restTemplate,
+                builder.build(),
                 "https://api.deepseek.com",
                 "test-api-key",
                 "deepseek-v4-flash"
@@ -91,10 +91,10 @@ class DeepSeekLlmProviderTests {
 
     @Test
     void generateTextWrapsHttpFailureAsLlmProviderException() {
-        RestTemplate restTemplate = new RestTemplate();
-        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         DeepSeekLlmProvider provider = new DeepSeekLlmProvider(
-                restTemplate,
+                builder.build(),
                 "https://api.deepseek.com",
                 "test-api-key",
                 "deepseek-v4-flash"

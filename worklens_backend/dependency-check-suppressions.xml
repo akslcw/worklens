@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2025-15104 is an SSRF in the "Nu Html Checker" (vnu)
+            project, misattributed to Hibernate Validator through the shared
+            "validator:validator" CPE (see dependency-check issue #8249).
+            The latest Hibernate Validator is still flagged, confirming the mismatch.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.hibernate\.validator/hibernate-validator@.*$</packageUrl>
+        <cve>CVE-2025-15104</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            False positive: CVE-2022-31691 affects Spring Boot 2.6.6 and is matched
+            against spring-boot-devtools 4.0.7 via an outdated CPE. Devtools is also
+            excluded from the repackaged boot jar (verified with jar tf).
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/spring-boot-devtools@.*$</packageUrl>
+        <cve>CVE-2022-31691</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            CVE-2026-66299 is a DoS in the Apache Tomcat WebSocket CHAT EXAMPLE webapp
+            (examples distribution). Embedded Tomcat does not ship the examples app,
+            so the library jars are not affected.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-(core|websocket)@.*$</packageUrl>
+        <cve>CVE-2026-66299</cve>
+    </suppress>
+</suppressions>

@@ -3,9 +3,10 @@ package com.su.worklens_backend.config;
 import com.su.worklens_backend.service.LlmProvider;
 import com.su.worklens_backend.service.impl.DeepSeekLlmProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 
@@ -14,7 +15,6 @@ public class LlmConfiguration {
 
     @Bean
     public LlmProvider llmProvider(
-            RestTemplateBuilder restTemplateBuilder,
             @Value("${worklens.llm.deepseek.base-url}") String baseUrl,
             @Value("${worklens.llm.deepseek.api-key}") String apiKey,
             @Value("${worklens.llm.deepseek.model}") String model,
@@ -29,11 +29,16 @@ public class LlmConfiguration {
                 throw new IllegalStateException("DeepSeek API key is not configured");
             };
         }
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
+        RestClient restClient = RestClient.builder()
+                .requestFactory(requestFactory)
+                .build();
+
         return new DeepSeekLlmProvider(
-                restTemplateBuilder
-                        .setConnectTimeout(connectTimeout)
-                        .setReadTimeout(readTimeout)
-                        .build(),
+                restClient,
                 baseUrl,
                 apiKey,
                 model

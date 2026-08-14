@@ -4,25 +4,23 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.su.worklens_backend.exception.LlmProviderException;
 import com.su.worklens_backend.exception.LlmProviderTimeoutException;
 import com.su.worklens_backend.service.LlmProvider;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.net.SocketTimeoutException;
 import java.util.List;
 
 public class DeepSeekLlmProvider implements LlmProvider {
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final String baseUrl;
     private final String apiKey;
     private final String model;
 
-    public DeepSeekLlmProvider(RestTemplate restTemplate, String baseUrl, String apiKey, String model) {
-        this.restTemplate = restTemplate;
+    public DeepSeekLlmProvider(RestClient restClient, String baseUrl, String apiKey, String model) {
+        this.restClient = restClient;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.apiKey = apiKey;
         this.model = model;
@@ -34,10 +32,6 @@ public class DeepSeekLlmProvider implements LlmProvider {
             throw new IllegalStateException("DeepSeek API key is not configured");
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(apiKey);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
         DeepSeekChatCompletionRequest requestBody = new DeepSeekChatCompletionRequest(
                 model,
                 List.of(new DeepSeekMessage("user", prompt))
@@ -45,17 +39,17 @@ public class DeepSeekLlmProvider implements LlmProvider {
 
         DeepSeekChatCompletionResponse response;
         try {
-            response = restTemplate.postForObject(
-                    baseUrl + "/chat/completions",
-                    new HttpEntity<>(requestBody, headers),
-                    DeepSeekChatCompletionResponse.class
-            );
-        } catch (ResourceAccessException exception) {
+            response = restClient.post()
+                    .uri(baseUrl + "/chat/completions")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(DeepSeekChatCompletionResponse.class);
+        } catch (RuntimeException exception) {
             if (isTimeout(exception)) {
                 throw new LlmProviderTimeoutException("DeepSeek API request timed out", exception);
             }
-            throw new LlmProviderException("DeepSeek API request failed", exception);
-        } catch (RuntimeException exception) {
             throw new LlmProviderException("DeepSeek API request failed", exception);
         }
 
@@ -71,7 +65,7 @@ public class DeepSeekLlmProvider implements LlmProvider {
         return message.content().trim();
     }
 
-    private boolean isTimeout(ResourceAccessException exception) {
+    private boolean isTimeout(Throwable exception) {
         Throwable current = exception;
         while (current != null) {
             if (current instanceof SocketTimeoutException
