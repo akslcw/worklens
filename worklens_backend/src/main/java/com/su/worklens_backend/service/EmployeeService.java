@@ -6,6 +6,7 @@ import com.su.worklens_backend.dto.CreateEmployeeResponse;
 import com.su.worklens_backend.dto.ResetEmployeePasswordResponse;
 import com.su.worklens_backend.entity.Employee;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface EmployeeService {
@@ -21,4 +22,11 @@ public interface EmployeeService {
     void deleteEmployee(Long id, AuthenticatedUser authenticatedUser);
 
     ResetEmployeePasswordResponse resetEmployeePassword(Long id, AuthenticatedUser authenticatedUser);
+
+    /**
+     * Permanently removes soft-deleted employees whose deletion happened
+     * before the given cutoff, together with their usage history, access
+     * requests, audit logs and orphaned login rows. Returns the purged count.
+     */
+    int purgeExpiredEmployees(LocalDateTime cutoff);
 }

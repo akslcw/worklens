@@ -16,6 +16,7 @@ import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.EmployeeService;
 import com.su.worklens_backend.service.PasswordHasher;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -42,16 +43,18 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final AuthTokenMapper authTokenMapper;
     private final AuthService authService;
     private final PasswordHasher passwordHasher;
+    private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public EmployeeServiceImpl(EmployeeMapper employeeMapper, AuthUserMapper authUserMapper, AuthTokenMapper authTokenMapper,
-                               AuthService authService, PasswordHasher passwordHasher, Clock clock) {
+                               AuthService authService, PasswordHasher passwordHasher, JdbcTemplate jdbcTemplate, Clock clock) {
         this.employeeMapper = employeeMapper;
         this.authUserMapper = authUserMapper;
         this.authTokenMapper = authTokenMapper;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
+        this.jdbcTemplate = jdbcTemplate;
         this.clock = clock;
     }
 
@@ -164,6 +167,38 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found");
         }
         return employee;
+    }
+
+    @Override
+    @Transactional
+    public int purgeExpiredEmployees(LocalDateTime cutoff) {
+        List<Employee> expired = employeeMapper.selectList(
+                new LambdaQueryWrapper<Employee>()
+                        .isNotNull(Employee::getDeletedAt)
+                        .lt(Employee::getDeletedAt, cutoff)
+        );
+        for (Employee employee : expired) {
+            long employeeId = employee.getId();
+            jdbcTemplate.update(
+                    "DELETE FROM detail_access_audit_logs WHERE viewer_employee_id = ? OR target_employee_id = ?",
+                    employeeId,
+                    employeeId
+            );
+            jdbcTemplate.update(
+                    "DELETE FROM detail_access_requests WHERE requester_employee_id = ? OR target_employee_id = ?",
+                    employeeId,
+                    employeeId
+            );
+            // usage_records and llm_reports cascade via their foreign keys.
+            employeeMapper.deleteById(employeeId);
+            // The soft-delete unbound the login row; remove the orphan by its
+            // original username (= employee number).
+            jdbcTemplate.update(
+                    "DELETE FROM auth_users WHERE employee_id IS NULL AND username = ?",
+                    employee.getEmployeeNo()
+            );
+        }
+        return expired.size();
     }
 
     private void ensureEmployeeNoAvailable(String employeeNo) {

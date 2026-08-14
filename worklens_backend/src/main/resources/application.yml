@@ -13,6 +13,13 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
 worklens:
+  admin:
+    username: ${WORKLENS_ADMIN_USERNAME:}
+    name: ${WORKLENS_ADMIN_NAME:Administrator}
+    password: ${WORKLENS_ADMIN_PASSWORD:}
+  retention:
+    days: ${WORKLENS_RETENTION_DAYS:30}
+    cron: ${WORKLENS_RETENTION_CRON:0 0 2 * * *}
   llm:
     deepseek:
       base-url: ${WORKLENS_DEEPSEEK_BASE_URL:https://api.deepseek.com}

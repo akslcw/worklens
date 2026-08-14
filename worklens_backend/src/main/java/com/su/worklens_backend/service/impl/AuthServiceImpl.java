@@ -17,6 +17,7 @@ import com.su.worklens_backend.mapper.AuthUserMapper;
 import com.su.worklens_backend.mapper.EmployeeMapper;
 import com.su.worklens_backend.service.AuthService;
 import com.su.worklens_backend.service.PasswordHasher;
+import com.su.worklens_backend.service.PasswordPolicy;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -229,20 +230,8 @@ public class AuthServiceImpl implements AuthService {
      * lower case, digit and symbol, and different from the current password.
      */
     private void validateNewPassword(String newPassword, String currentPassword) {
-        if (newPassword == null
-                || newPassword.length() < 8
-                || !newPassword.matches(".*[a-z].*")
-                || !newPassword.matches(".*[A-Z].*")
-                || !newPassword.matches(".*\\d.*")
-                || !newPassword.matches(".*[^A-Za-z0-9].*")) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "New password must be at least 8 characters and include uppercase, lowercase, digit and symbol"
-            );
-        }
-        if (newPassword.equals(currentPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be different from the current password");
-        }
+        PasswordPolicy.requireStrength(newPassword);
+        PasswordPolicy.requireDifferent(newPassword, currentPassword);
     }
 
     @Override
