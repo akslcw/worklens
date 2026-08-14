@@ -2,7 +2,10 @@ param(
     [switch]$SkipInstall
 )
 
-$ErrorActionPreference = "Stop"
+# Continue instead of Stop: pip/PyInstaller write progress to stderr, which
+# PowerShell would otherwise surface as a terminating NativeCommandError.
+# Real failures are still detected via $LASTEXITCODE checks below.
+$ErrorActionPreference = "Continue"
 
 $clientRoot = $PSScriptRoot
 $venvRoot = Join-Path $clientRoot ".venv"
